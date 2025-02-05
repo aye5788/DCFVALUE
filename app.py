@@ -1,113 +1,104 @@
 import streamlit as st
 import requests
-import datetime
+from datetime import datetime
 
-# Load API Key from Streamlit Secrets
+# Load API key from Streamlit secrets
 API_KEY = st.secrets["fmp"]["api_key"]
-
-# Base URLs for FMP API
 BASE_URL = "https://financialmodelingprep.com/api/v3"
 
-# Function to get Discounted Cash Flow (DCF) Valuation
+# Get today's date dynamically
+TODAY_DATE = datetime.today().strftime("%Y-%m-%d")
+
+# Function to fetch DCF valuation
 def get_dcf(ticker):
     url = f"{BASE_URL}/discounted-cash-flow/{ticker}?apikey={API_KEY}"
     response = requests.get(url)
-    if response.status_code == 200 and response.json():
-        return response.json()[0]
-    return {}
+    data = response.json()
+    return data[0] if data and isinstance(data, list) else None
 
-# Function to get Financial Ratios (Ensures Annual Data)
-def get_financial_ratios(ticker):
+# Function to fetch financial ratios
+def get_ratios(ticker):
     url = f"{BASE_URL}/ratios/{ticker}?period=annual&limit=1&apikey={API_KEY}"
     response = requests.get(url)
-    if response.status_code == 200 and response.json():
-        return response.json()[0]  # Extract most recent annual ratios
-    return {}
+    data = response.json()
+    return data[0] if data and isinstance(data, list) else None
 
-# Function to get Sector P/E Ratio
-def get_sector_pe():
-    today = datetime.date.today().strftime("%Y-%m-%d")
-    url = f"{BASE_URL}/sector_price_earning_ratio?date={today}&apikey={API_KEY}"
-    response = requests.get(url)
-    if response.status_code == 200 and response.json():
-        return {entry["sector"]: entry["pe"] for entry in response.json()}
-    return {}
-
-# Function to get Stock Profile (Sector Info)
-def get_stock_profile(ticker):
+# Function to fetch company profile (sector info)
+def get_company_sector(ticker):
     url = f"{BASE_URL}/profile/{ticker}?apikey={API_KEY}"
     response = requests.get(url)
-    if response.status_code == 200 and response.json():
-        return response.json()[0]
-    return {}
+    data = response.json()
+    return data[0].get("sector", "").strip() if data and isinstance(data, list) else "Unknown"
 
-# Streamlit App UI
-st.title("📈 Stock Valuation & Financial Metrics")
+# Function to fetch ALL sector P/E ratios using today's date
+@st.cache_data(ttl=0)
+def get_sector_pe(date=TODAY_DATE):
+    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={date}&apikey={API_KEY}"
+    response = requests.get(url)
+    data = response.json()
+    return {item["sector"].strip(): float(item["pe"]) for item in data} if data and isinstance(data, list) else {}
 
-ticker = st.text_input("Enter stock ticker:", "AAPL")
+# Explanations for financial ratios
+RATIO_EXPLANATIONS = {
+    "priceEarningsRatio": "Price-to-Earnings (P/E) Ratio indicates how much investors are willing to pay per dollar of earnings.",
+    "currentRatio": "Current Ratio measures a company's ability to pay short-term obligations with short-term assets.",
+    "quickRatio": "Quick Ratio assesses liquidity by excluding inventory from assets.",
+    "debtEquityRatio": "Debt to Equity Ratio compares a company's total liabilities to shareholder equity, indicating leverage.",
+    "returnOnEquity": "Return on Equity (ROE) shows how efficiently a company generates profits from shareholders' equity."
+}
 
-if st.button("Analyze"):
-    # Fetch Data
+# Streamlit UI
+st.title("Stock Valuation Dashboard")
+
+# User input for stock ticker
+ticker = st.text_input("Enter stock ticker:").upper()
+
+# "Analyze" button to trigger calculations
+if st.button("Analyze") and ticker:
+    sector = get_company_sector(ticker)
     dcf_data = get_dcf(ticker)
-    ratios = get_financial_ratios(ticker)
-    sector_data = get_sector_pe()
-    stock_profile = get_stock_profile(ticker)
+    ratios_data = get_ratios(ticker)
+    sector_pe_data = get_sector_pe()
 
-    # Extract Relevant Data
-    stock_price = dcf_data.get("Stock Price", "N/A")
-    dcf_valuation = dcf_data.get("dcf", "N/A")
-    stock_sector = stock_profile.get("sector", "Unknown")
+    if dcf_data and ratios_data:
+        st.subheader(f"Valuation Metrics for {ticker}")
 
-    # Financial Ratios
-    pe_ratio = ratios.get("priceEarnings", "N/A")
-    current_ratio = ratios.get("currentRatio", "N/A")
-    quick_ratio = ratios.get("quickRatio", "N/A")
-    debt_to_equity = ratios.get("debtEquityRatio", "N/A")
-    roe = ratios.get("returnOnEquity", "N/A")
+        # Display DCF Valuation
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("DCF Valuation", f"${dcf_data['dcf']:.2f}")
+        with col2:
+            st.metric("Stock Price", f"${dcf_data['Stock Price']:.2f}")
 
-    # Format ROE as a percentage
-    roe_display = f"{roe*100:.2f}%" if isinstance(roe, (int, float)) else "N/A"
+        # Display financial ratios with explanations
+        st.subheader("Key Financial Ratios")
+        for key, explanation in RATIO_EXPLANATIONS.items():
+            if key in ratios_data:
+                value = ratios_data[key]
+                if key == "returnOnEquity":
+                    value = f"{value * 100:.2f}%"  # Convert to percentage
+                else:
+                    value = f"{value:.2f}"
+                st.write(f"**{key.replace('Ratio', '').replace('Equity', ' Equity')}**: {value}  \n*{explanation}*")
 
-    # Get Sector P/E
-    sector_pe = sector_data.get(stock_sector, "N/A")
+        # Get sector P/E and compare
+        sector_pe = sector_pe_data.get(sector)
+        stock_pe = ratios_data.get("priceEarningsRatio")
 
-    # Display Data
-    st.subheader(f"Valuation Metrics for {ticker}")
-    col1, col2 = st.columns(2)
-    col1.metric("💰 DCF Valuation", f"${dcf_valuation}")
-    col2.metric("📊 Stock Price", f"${stock_price}")
+        if sector_pe:
+            st.subheader("P/E Ratio Comparison")
+            col3, col4 = st.columns(2)
+            with col3:
+                st.metric(f"{ticker} P/E", f"{stock_pe:.2f}")
+            with col4:
+                st.metric(f"{sector} Sector P/E", f"{sector_pe:.2f}")
 
-    # Financial Ratios
-    st.subheader("📊 Key Financial Ratios")
-    st.markdown(f"""
-    **Price-to-Earnings (P/E) Ratio:** {pe_ratio}  
-    *Higher P/E suggests strong growth expectations. Below 15 = undervalued, 15-25 = fair, above 25 = overvalued.*  
-
-    **Current Ratio:** {current_ratio}  
-    *Above 1.5 = strong liquidity, 1.0-1.5 = adequate, below 1 = potential liquidity issues.*  
-
-    **Quick Ratio:** {quick_ratio}  
-    *Above 1.0 = strong liquidity, 0.5-1.0 = acceptable, below 0.5 = risky.*  
-
-    **Debt to Equity Ratio:** {debt_to_equity}  
-    *Below 1.0 = conservative financing, 1.0-2.0 = moderate risk, above 2.0 = highly leveraged.*  
-
-    **Return on Equity (ROE):** {roe_display}  
-    *Above 15% = strong, 10-15% = average, below 10% = weak.*  
-    """)
-
-    # P/E Ratio Comparison
-    st.subheader("📈 P/E Ratio Comparison")
-    col1, col2 = st.columns(2)
-    col1.metric(f"{ticker} P/E", pe_ratio)
-    col2.metric(f"{stock_sector} Sector P/E", sector_pe)
-
-    # Interpretation of P/E Comparison
-    if isinstance(pe_ratio, (int, float)) and isinstance(sector_pe, (int, float)):
-        if pe_ratio > sector_pe:
-            st.success(f"{ticker} has a higher P/E than its sector average. It may be overvalued.")
+            if stock_pe > sector_pe:
+                st.warning(f"{ticker} has a higher P/E than its sector average. It may be overvalued.")
+            else:
+                st.success(f"{ticker} has a lower P/E than its sector average. It may be undervalued.")
         else:
-            st.info(f"{ticker} has a lower P/E than its sector average. It may be undervalued.")
+            st.error(f"Sector P/E ratio for **{sector}** not available for comparison.")
     else:
-        st.warning(f"⚠️ Sector P/E ratio for {stock_sector} not found. Check sector name matching above.")
+        st.error("Could not fetch data for the given ticker. Please check and try again.")
 
