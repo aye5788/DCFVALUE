@@ -9,29 +9,41 @@ TODAY_DATE = datetime.today().strftime("%Y-%m-%d")
 # Function to fetch data
 def get_dcf(ticker):
     url = f"{BASE_URL}/discounted-cash-flow/{ticker}?apikey={API_KEY}"
-    return requests.get(url).json()[0]
+    response = requests.get(url)
+    return response.json()[0] if response.status_code == 200 and response.json() else None
 
 def get_ratios(ticker):
     url = f"{BASE_URL}/ratios/{ticker}?period=annual&limit=1&apikey={API_KEY}"
-    return requests.get(url).json()[0]
+    response = requests.get(url)
+    return response.json()[0] if response.status_code == 200 and response.json() else None
 
 def get_company_sector(ticker):
     url = f"{BASE_URL}/profile/{ticker}?apikey={API_KEY}"
-    return requests.get(url).json()[0]["sector"].strip()
+    response = requests.get(url)
+    return response.json()[0]["sector"].strip() if response.status_code == 200 and response.json() else None
 
 @st.cache_data(ttl=0)
 def get_sector_pe(date=TODAY_DATE):
     url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={date}&apikey={API_KEY}"
     response = requests.get(url)
-    return {item["sector"].strip(): float(item["pe"]) for item in response.json()}
+    return {item["sector"].strip(): float(item["pe"]) for item in response.json()} if response.status_code == 200 and response.json() else None
 
-# 📌 Function to fetch **Growth Metrics**
-def get_growth_metrics(ticker):
-    url = f"{BASE_URL}/key-metrics/{ticker}?limit=1&apikey={API_KEY}"
+# 📌 Function to fetch last 5 years of key metrics (including revenue)
+def get_key_metrics(ticker, years=5):
+    url = f"{BASE_URL}/key-metrics/{ticker}?limit={years}&apikey={API_KEY}"
     response = requests.get(url)
-    return response.json()[0] if response.status_code == 200 and response.json() else None
+    return response.json() if response.status_code == 200 and response.json() else None
 
-# Ratio explanations WITH benchmarks
+# 📌 Function to compute Revenue Growth (YoY)
+def compute_revenue_growth(metrics):
+    if metrics and len(metrics) > 1:
+        revenue_latest = metrics[0].get("revenue")
+        revenue_previous = metrics[1].get("revenue")
+        if revenue_latest and revenue_previous:
+            return ((revenue_latest - revenue_previous) / revenue_previous) * 100
+    return None
+
+# 📌 Ratio explanations WITH benchmarks
 RATIO_GUIDANCE = {
     "priceEarningsRatio": ("Price-to-Earnings (P/E) Ratio", 
                            "Higher P/E suggests strong growth expectations. Below 15 = undervalued, 15-25 = fairly valued, above 25 = overvalued."),
@@ -45,7 +57,7 @@ RATIO_GUIDANCE = {
                        "Above 15% = strong, 10-15% = average, below 10% = weak.")
 }
 
-# 📌 Growth Screener Benchmarks (Expanded)
+# 📌 Growth Screener Benchmarks (Updated)
 GROWTH_GUIDANCE = {
     "revenueGrowth": ("Revenue Growth (YoY)", "Above 20% = strong, 10-20% = average, below 10% = weak."),
     "priceToSalesRatio": ("Price-to-Sales (P/S) Ratio", "Lower is better, but high P/S may be justified by strong growth."),
@@ -55,7 +67,7 @@ GROWTH_GUIDANCE = {
     "operatingCashFlowGrowth": ("Operating Cash Flow Growth", "Consistent growth indicates strong business fundamentals."),
 }
 
-# 📌 Sidebar Navigation (Added Growth Screener Without Changing Anything Else)
+# 📌 Sidebar Navigation (Kept Everything Else Unchanged)
 st.sidebar.title("📊 Navigation")
 page = st.sidebar.radio("Choose a Screener", ["Valuation Dashboard", "Growth Stock Screener"])
 
@@ -83,11 +95,7 @@ if page == "Valuation Dashboard":
             st.subheader("📊 Key Financial Ratios")
             for key, (title, guidance) in RATIO_GUIDANCE.items():
                 if key in ratios_data:
-                    value = ratios_data[key]
-                    if key == "returnOnEquity":
-                        value = f"{value * 100:.2f}%"  # Convert to percentage
-                    else:
-                        value = f"{value:.2f}"
+                    value = f"{ratios_data[key]:.2f}"
                     st.markdown(f"**{title}:** {value}  \n*{guidance}*")
 
             sector_pe = sector_pe_data.get(sector)
@@ -109,7 +117,7 @@ if page == "Valuation Dashboard":
             st.error("Could not fetch data for the given ticker.")
 
 # ===========================================
-# 📌 GROWTH STOCK SCREENER (Fixed & Expanded)
+# 📌 GROWTH STOCK SCREENER (Updated with Revenue Growth)
 # ===========================================
 elif page == "Growth Stock Screener":
     st.title("🚀 Growth Stock Screener")
@@ -117,19 +125,26 @@ elif page == "Growth Stock Screener":
     ticker = st.text_input("Enter stock ticker for growth analysis:").upper()
 
     if st.button("Analyze Growth") and ticker:
-        growth_data = get_growth_metrics(ticker)
+        key_metrics = get_key_metrics(ticker)
+        revenue_growth = compute_revenue_growth(key_metrics)
 
-        if growth_data:
+        if key_metrics:
             st.subheader(f"📈 Growth Metrics for {ticker}")
 
             for key, (title, guidance) in GROWTH_GUIDANCE.items():
-                value = growth_data.get(key, "N/A")  # Ensure missing values show as N/A
+                if key == "revenueGrowth":
+                    value = f"{revenue_growth:.2f}%" if revenue_growth is not None else "N/A"
+                else:
+                    value = key_metrics[0].get(key, "N/A")
+
                 if isinstance(value, (int, float)):
                     if "Margin" in title or "Growth" in title:
                         value = f"{value * 100:.2f}%"  # Convert to percentage
                     else:
                         value = f"{value:.2f}"
+
                 st.markdown(f"**{title}:** {value}  \n*{guidance}*")
 
         else:
             st.error("❌ Growth metrics not available for this stock.")
+
