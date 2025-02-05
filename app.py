@@ -25,12 +25,13 @@ def get_ratios(ticker):
     return None
 
 # Function to fetch company profile (for sector info)
-def get_company_profile(ticker):
+def get_company_sector(ticker):
     url = f"{BASE_URL}/profile/{ticker}?apikey={API_KEY}"
     response = requests.get(url)
     data = response.json()
     if data and isinstance(data, list) and len(data) > 0:
-        return data[0].get("sector", "Unknown")
+        sector = data[0].get("sector", "").strip()
+        return sector
     return "Unknown"
 
 # Function to fetch sector P/E ratio
@@ -39,7 +40,7 @@ def get_sector_pe():
     response = requests.get(url)
     data = response.json()
     if data and isinstance(data, list):
-        return {item["sector"]: float(item["pe"]) for item in data}
+        return {item["sector"].strip(): float(item["pe"]) for item in data}
     return {}
 
 # Streamlit UI
@@ -51,8 +52,8 @@ ticker = st.text_input("Enter stock ticker:").upper()
 # "Analyze" button to prevent auto-loading data
 if st.button("Analyze"):
     if ticker:
-        # Fetch company profile for sector
-        sector = get_company_profile(ticker)
+        # Fetch the correct sector
+        sector = get_company_sector(ticker)
 
         # Fetch data
         dcf_data = get_dcf(ticker)
