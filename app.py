@@ -1,9 +1,13 @@
 import streamlit as st
 import requests
+from datetime import datetime
 
 # Load API key from Streamlit secrets
 API_KEY = st.secrets["fmp"]["api_key"]
 BASE_URL = "https://financialmodelingprep.com/api/v3"
+
+# Get today's date dynamically
+TODAY_DATE = datetime.today().strftime("%Y-%m-%d")
 
 # Function to fetch DCF valuation
 def get_dcf(ticker):
@@ -35,16 +39,20 @@ def get_company_sector(ticker):
         return sector  # Use exact API sector name
     return "Unknown"
 
-# Function to fetch ALL sector P/E ratios at once
-def get_sector_pe(date="latest"):
+# Function to fetch ALL sector P/E ratios at once with today's date
+@st.cache_data(ttl=0)  # Ensures fresh data each request
+def get_sector_pe(date=TODAY_DATE):  # Uses dynamically generated date
     url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={date}&apikey={API_KEY}"
     response = requests.get(url)
+
+    # Debugging: Print API response
+    st.write("🔍 **Raw API Response:**", response.text)
+
     data = response.json()
-
     if data and isinstance(data, list):
-        pe_dict = {item["sector"].strip(): float(item["pe"]) for item in data}  # Store all P/E ratios in a dict
+        pe_dict = {item["sector"].strip(): float(item["pe"]) for item in data}
 
-        # Debugging: Print sector P/E data in console
+        # Debugging: Print fetched sector P/E data
         print("\n✅ Fetched Sector P/E Data:")
         for sector, pe in pe_dict.items():
             print(f"  Sector: {sector}, P/E: {pe}")
@@ -112,5 +120,4 @@ if st.button("Analyze"):
                 st.error(f"Sector P/E ratio for **{sector}** not available for comparison. Check debugging output above.")
         else:
             st.error("Could not fetch data for the given ticker. Please check and try again.")
-
 
