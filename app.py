@@ -14,21 +14,21 @@ def get_dcf(ticker):
     url = f"{BASE_URL}/discounted-cash-flow/{ticker}?apikey={API_KEY}"
     response = requests.get(url)
     data = response.json()
-    return data[0] if data and isinstance(data, list) and len(data) > 0 else None
+    return data[0] if data and isinstance(data, list) else None
 
 # Function to fetch financial ratios
 def get_ratios(ticker):
     url = f"{BASE_URL}/ratios/{ticker}?period=annual&limit=1&apikey={API_KEY}"
     response = requests.get(url)
     data = response.json()
-    return data[0] if data and isinstance(data, list) and len(data) > 0 else None
+    return data[0] if data and isinstance(data, list) else None
 
 # Function to fetch company profile (sector info)
 def get_company_sector(ticker):
     url = f"{BASE_URL}/profile/{ticker}?apikey={API_KEY}"
     response = requests.get(url)
     data = response.json()
-    return data[0].get("sector", "").strip() if data and isinstance(data, list) and len(data) > 0 else "Unknown"
+    return data[0].get("sector", "").strip() if data and isinstance(data, list) else "Unknown"
 
 # Function to fetch ALL sector P/E ratios using today's date
 @st.cache_data(ttl=0)
@@ -40,11 +40,11 @@ def get_sector_pe(date=TODAY_DATE):
 
 # Explanations for financial ratios
 RATIO_EXPLANATIONS = {
-    "P/E Ratio": "Price-to-Earnings (P/E) Ratio indicates how much investors are willing to pay per dollar of earnings.",
-    "Current Ratio": "Current Ratio measures a company's ability to pay short-term obligations with short-term assets.",
-    "Quick Ratio": "Quick Ratio assesses liquidity by excluding inventory from assets.",
-    "Debt to Equity": "Debt to Equity Ratio compares a company's total liabilities to shareholder equity, indicating leverage.",
-    "Return on Equity (ROE)": "Return on Equity shows how efficiently a company generates profits from shareholders' equity."
+    "priceEarningsRatio": "Price-to-Earnings (P/E) Ratio indicates how much investors are willing to pay per dollar of earnings.",
+    "currentRatio": "Current Ratio measures a company's ability to pay short-term obligations with short-term assets.",
+    "quickRatio": "Quick Ratio assesses liquidity by excluding inventory from assets.",
+    "debtEquityRatio": "Debt to Equity Ratio compares a company's total liabilities to shareholder equity, indicating leverage.",
+    "returnOnEquity": "Return on Equity (ROE) shows how efficiently a company generates profits from shareholders' equity."
 }
 
 # Streamlit UI
@@ -72,12 +72,14 @@ if st.button("Analyze") and ticker:
 
         # Display financial ratios with explanations
         st.subheader("Key Financial Ratios")
-        for ratio, explanation in RATIO_EXPLANATIONS.items():
-            value = ratios_data.get(ratio.lower().replace(" ", ""), "N/A")
-            if value != "N/A":
-                if "Return on Equity" in ratio:
+        for key, explanation in RATIO_EXPLANATIONS.items():
+            if key in ratios_data:
+                value = ratios_data[key]
+                if key == "returnOnEquity":
                     value = f"{value * 100:.2f}%"  # Convert to percentage
-                st.write(f"**{ratio}**: {value}  \n*{explanation}*")
+                else:
+                    value = f"{value:.2f}"
+                st.write(f"**{key.replace('Ratio', '').replace('Equity', ' Equity')}**: {value}  \n*{explanation}*")
 
         # Get sector P/E and compare
         sector_pe = sector_pe_data.get(sector)
@@ -99,4 +101,3 @@ if st.button("Analyze") and ticker:
             st.error(f"Sector P/E ratio for **{sector}** not available for comparison.")
     else:
         st.error("Could not fetch data for the given ticker. Please check and try again.")
-
