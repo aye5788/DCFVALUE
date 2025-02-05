@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import pandas as pd
 
 # Load API key from Streamlit secrets
 API_KEY = st.secrets["fmp"]["api_key"]
@@ -29,6 +28,7 @@ def get_company_sector(ticker):
     url = f"{BASE_URL}/profile/{ticker}?apikey={API_KEY}"
     response = requests.get(url)
     data = response.json()
+
     if data and isinstance(data, list) and len(data) > 0:
         sector = data[0].get("sector", "").strip()
         print(f"\n✅ Stock: {ticker}, Sector Identified: {sector}")  # Debugging sector name
@@ -44,7 +44,7 @@ def get_sector_pe(date="latest"):
     if data and isinstance(data, list):
         pe_dict = {item["sector"].strip(): float(item["pe"]) for item in data}  # Store all P/E ratios in a dict
 
-        # Print sector P/E data for debugging
+        # Debugging: Print sector P/E data in console
         print("\n✅ Fetched Sector P/E Data:")
         for sector, pe in pe_dict.items():
             print(f"  Sector: {sector}, P/E: {pe}")
@@ -91,6 +91,11 @@ if st.button("Analyze"):
             # Get the sector P/E using the exact sector name
             sector_pe = sector_pe_data.get(sector)
 
+            # Debugging output in Streamlit
+            st.write("### 🔍 Debugging Information")
+            st.write(f"**Stock Sector Identified:** `{sector}`")
+            st.write("**Sector P/E Data Fetched:**", sector_pe_data)
+
             if sector_pe:
                 st.subheader("P/E Ratio Comparison")
                 col3, col4 = st.columns(2)
@@ -104,7 +109,8 @@ if st.button("Analyze"):
                 else:
                     st.success(f"{ticker} has a lower P/E than its sector average. It may be undervalued.")
             else:
-                st.error(f"Sector P/E ratio for **{sector}** not available for comparison.")
+                st.error(f"Sector P/E ratio for **{sector}** not available for comparison. Check debugging output above.")
         else:
             st.error("Could not fetch data for the given ticker. Please check and try again.")
+
 
