@@ -2,8 +2,8 @@ import streamlit as st
 import requests
 from datetime import datetime
 
-# Get API key from Streamlit secrets
-API_KEY = st.secrets["API_KEY"]
+# Fetch API key from correct secret path
+API_KEY = st.secrets["fmp"]["api_key"]
 
 def get_stock_profile(ticker):
     """Fetches stock profile (sector, financial ratios, etc.)."""
@@ -89,4 +89,5 @@ if st.button("Analyze"):
             st.error(f"⚠️ Sector P/E not found for {stock_sector}. Check sector name matching above.")
     else:
         st.error("Invalid stock ticker or no data available.")
+
 
