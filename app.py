@@ -29,7 +29,7 @@ def get_sector_pe(date=TODAY_DATE):
 def get_growth_metrics(ticker):
     url = f"{BASE_URL}/key-metrics/{ticker}?limit=1&apikey={API_KEY}"
     response = requests.get(url)
-    return response.json()[0] if response.status_code == 200 else None
+    return response.json()[0] if response.status_code == 200 and response.json() else None
 
 # Ratio explanations WITH benchmarks
 RATIO_GUIDANCE = {
@@ -109,7 +109,7 @@ if page == "Valuation Dashboard":
             st.error("Could not fetch data for the given ticker.")
 
 # ===========================================
-# 📌 GROWTH STOCK SCREENER (Only This Part Modified)
+# 📌 GROWTH STOCK SCREENER (Fixed & Expanded)
 # ===========================================
 elif page == "Growth Stock Screener":
     st.title("🚀 Growth Stock Screener")
@@ -123,13 +123,13 @@ elif page == "Growth Stock Screener":
             st.subheader(f"📈 Growth Metrics for {ticker}")
 
             for key, (title, guidance) in GROWTH_GUIDANCE.items():
-                if key in growth_data:
-                    value = growth_data[key]
+                value = growth_data.get(key, "N/A")  # Ensure missing values show as N/A
+                if isinstance(value, (int, float)):
                     if "Margin" in title or "Growth" in title:
                         value = f"{value * 100:.2f}%"  # Convert to percentage
                     else:
                         value = f"{value:.2f}"
-                    st.markdown(f"**{title}:** {value}  \n*{guidance}*")
+                st.markdown(f"**{title}:** {value}  \n*{guidance}*")
 
         else:
             st.error("❌ Growth metrics not available for this stock.")
