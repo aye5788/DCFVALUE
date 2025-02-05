@@ -11,8 +11,8 @@ def get_dcf(ticker):
     url = f"{BASE_URL}/discounted-cash-flow/{ticker}?apikey={API_KEY}"
     response = requests.get(url)
     data = response.json()
-    if data and isinstance(data, list):
-        return data[0]  # Return first result
+    if data and isinstance(data, list) and len(data) > 0:
+        return data[0]
     return None
 
 # Function to fetch financial ratios
@@ -20,8 +20,8 @@ def get_ratios(ticker):
     url = f"{BASE_URL}/ratios/{ticker}?period=annual&limit=1&apikey={API_KEY}"
     response = requests.get(url)
     data = response.json()
-    if data and isinstance(data, list):
-        return data[0]  # Return first result
+    if data and isinstance(data, list) and len(data) > 0:
+        return data[0]
     return None
 
 # Function to fetch company profile (for sector info)
@@ -29,13 +29,13 @@ def get_company_profile(ticker):
     url = f"{BASE_URL}/profile/{ticker}?apikey={API_KEY}"
     response = requests.get(url)
     data = response.json()
-    if data and isinstance(data, list):
+    if data and isinstance(data, list) and len(data) > 0:
         return data[0].get("sector", "Unknown")
     return "Unknown"
 
 # Function to fetch sector P/E ratio
-def get_sector_pe(date="latest", exchange="NYSE"):
-    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={date}&exchange={exchange}&apikey={API_KEY}"
+def get_sector_pe():
+    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date=latest&exchange=NYSE&apikey={API_KEY}"
     response = requests.get(url)
     data = response.json()
     if data and isinstance(data, list):
@@ -81,7 +81,7 @@ if st.button("Analyze"):
             # Compare stock P/E to sector P/E
             sector_pe = sector_pe_data.get(sector)
 
-            if stock_pe and sector_pe:
+            if sector_pe:
                 st.subheader("P/E Ratio Comparison")
                 col3, col4 = st.columns(2)
                 with col3:
@@ -94,7 +94,7 @@ if st.button("Analyze"):
                 else:
                     st.success(f"{ticker} has a lower P/E than its sector average. It may be undervalued.")
             else:
-                st.error("Sector P/E ratio not available for comparison.")
+                st.error(f"Sector P/E ratio for **{sector}** not available for comparison.")
         else:
             st.error("Could not fetch data for the given ticker. Please check and try again.")
 
