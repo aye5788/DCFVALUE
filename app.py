@@ -6,6 +6,21 @@ import pandas as pd
 API_KEY = st.secrets["fmp"]["api_key"]
 BASE_URL = "https://financialmodelingprep.com/api/v3"
 
+# Mapping to ensure sector names match between APIs
+SECTOR_MAPPING = {
+    "Financial Services": "Financials",
+    "Health Care": "Healthcare",
+    "Technology": "Technology",
+    "Consumer Cyclical": "Consumer Cyclical",
+    "Consumer Defensive": "Consumer Defensive",
+    "Industrials": "Industrials",
+    "Basic Materials": "Basic Materials",
+    "Energy": "Energy",
+    "Utilities": "Utilities",
+    "Real Estate": "Real Estate",
+    "Communication Services": "Communication Services"
+}
+
 # Function to fetch DCF valuation
 def get_dcf(ticker):
     url = f"{BASE_URL}/discounted-cash-flow/{ticker}?apikey={API_KEY}"
@@ -24,24 +39,24 @@ def get_ratios(ticker):
         return data[0]
     return None
 
-# Function to fetch company profile (sector + exchange info)
-def get_company_info(ticker):
+# Function to fetch company profile (sector info)
+def get_company_sector(ticker):
     url = f"{BASE_URL}/profile/{ticker}?apikey={API_KEY}"
     response = requests.get(url)
     data = response.json()
     if data and isinstance(data, list) and len(data) > 0:
         sector = data[0].get("sector", "").strip()
-        exchange = data[0].get("exchangeShortName", "").strip()
-        return sector, exchange  # Return both sector and exchange
-    return "Unknown", "Unknown"
+        mapped_sector = SECTOR_MAPPING.get(sector, sector)  # Map sector correctly
+        return mapped_sector
+    return "Unknown"
 
-# Function to fetch sector P/E ratio for the correct exchange
-def get_sector_pe(exchange):
-    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date=latest&exchange={exchange}&apikey={API_KEY}"
+# Function to fetch ALL sector P/E ratios at once
+def get_sector_pe():
+    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date=latest&apikey={API_KEY}"
     response = requests.get(url)
     data = response.json()
     if data and isinstance(data, list):
-        return {item["sector"].strip(): float(item["pe"]) for item in data}  # Standardizing keys
+        return {item["sector"].strip(): float(item["pe"]) for item in data}  # Store all P/E ratios in a dict
     return {}
 
 # Streamlit UI
@@ -53,13 +68,13 @@ ticker = st.text_input("Enter stock ticker:").upper()
 # "Analyze" button to prevent auto-loading data
 if st.button("Analyze"):
     if ticker:
-        # Fetch the correct sector and exchange
-        sector, exchange = get_company_info(ticker)
+        # Fetch the correct sector
+        sector = get_company_sector(ticker)
 
         # Fetch data
         dcf_data = get_dcf(ticker)
         ratios_data = get_ratios(ticker)
-        sector_pe_data = get_sector_pe(exchange)  # Now uses correct exchange
+        sector_pe_data = get_sector_pe()  # Fetch all sector P/E ratios
 
         if dcf_data and ratios_data:
             st.subheader(f"Valuation Metrics for {ticker}")
@@ -80,7 +95,7 @@ if st.button("Analyze"):
             st.write(f"**Debt to Equity**: {ratios_data.get('debtEquityRatio', 'N/A')}")
             st.write(f"**Return on Equity (ROE)**: {ratios_data.get('returnOnEquity', 'N/A')}")
 
-            # Compare stock P/E to sector P/E
+            # Get the sector P/E
             sector_pe = sector_pe_data.get(sector)
 
             if sector_pe:
@@ -96,6 +111,6 @@ if st.button("Analyze"):
                 else:
                     st.success(f"{ticker} has a lower P/E than its sector average. It may be undervalued.")
             else:
-                st.error(f"Sector P/E ratio for **{sector}** on **{exchange}** not available for comparison.")
+                st.error(f"Sector P/E ratio for **{sector}** not available for comparison.")
         else:
             st.error("Could not fetch data for the given ticker. Please check and try again.")
