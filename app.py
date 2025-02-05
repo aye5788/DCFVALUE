@@ -25,7 +25,7 @@ def get_sector_pe(date=TODAY_DATE):
     response = requests.get(url)
     return {item["sector"].strip(): float(item["pe"]) for item in response.json()}
 
-# 📌 New function to fetch **Growth Metrics**
+# 📌 Function to fetch **Growth Metrics**
 def get_growth_metrics(ticker):
     url = f"{BASE_URL}/key-metrics/{ticker}?limit=1&apikey={API_KEY}"
     response = requests.get(url)
@@ -45,21 +45,22 @@ RATIO_GUIDANCE = {
                        "Above 15% = strong, 10-15% = average, below 10% = weak.")
 }
 
-# 📌 New Growth Screener Benchmarks
+# 📌 Growth Screener Benchmarks (Expanded)
 GROWTH_GUIDANCE = {
     "revenueGrowth": ("Revenue Growth (YoY)", "Above 20% = strong, 10-20% = average, below 10% = weak."),
     "priceToSalesRatio": ("Price-to-Sales (P/S) Ratio", "Lower is better, but high P/S may be justified by strong growth."),
     "enterpriseValueOverRevenue": ("EV/Revenue", "Used to value high-growth companies; compare to sector."),
     "grossProfitMargin": ("Gross Margin (%)", "Above 50% = strong pricing power and scalability."),
     "freeCashFlowPerShare": ("Free Cash Flow Per Share", "A positive and growing FCF is ideal for long-term sustainability."),
+    "operatingCashFlowGrowth": ("Operating Cash Flow Growth", "Consistent growth indicates strong business fundamentals."),
 }
 
-# 📌 Navigation Menu (ONLY ADDED Growth Screener, NOTHING ELSE CHANGED)
+# 📌 Sidebar Navigation (Added Growth Screener Without Changing Anything Else)
 st.sidebar.title("📊 Navigation")
 page = st.sidebar.radio("Choose a Screener", ["Valuation Dashboard", "Growth Stock Screener"])
 
 # ===========================================
-# 📌 STOCK VALUATION DASHBOARD (Original Code, NOT Changed)
+# 📌 STOCK VALUATION DASHBOARD (Original Code, Unchanged)
 # ===========================================
 if page == "Valuation Dashboard":
     st.title("📈 Stock Valuation Dashboard")
@@ -108,7 +109,7 @@ if page == "Valuation Dashboard":
             st.error("Could not fetch data for the given ticker.")
 
 # ===========================================
-# 📌 GROWTH STOCK SCREENER (NEW, SEPARATE, NOTHING ELSE CHANGED)
+# 📌 GROWTH STOCK SCREENER (Only This Part Modified)
 # ===========================================
 elif page == "Growth Stock Screener":
     st.title("🚀 Growth Stock Screener")
@@ -132,5 +133,3 @@ elif page == "Growth Stock Screener":
 
         else:
             st.error("❌ Growth metrics not available for this stock.")
-
-
