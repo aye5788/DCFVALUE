@@ -32,15 +32,21 @@ def get_sector_pe(date=TODAY_DATE):
 def get_key_metrics(ticker, years=5):
     url = f"{BASE_URL}/key-metrics/{ticker}?limit={years}&apikey={API_KEY}"
     response = requests.get(url)
-    return response.json() if response.status_code == 200 and response.json() else None
+    data = response.json()
+
+    # Debugging: Print the raw API response to check key names
+    st.write("Raw API Response:", data)
+
+    return data if response.status_code == 200 and data else None
 
 # 📌 Function to compute Revenue Growth (YoY)
 def compute_revenue_growth(metrics):
     if metrics and len(metrics) > 1:
-        revenue_latest = metrics[0].get("revenue")
-        revenue_previous = metrics[1].get("revenue")
-        if revenue_latest and revenue_previous:
-            return ((revenue_latest - revenue_previous) / revenue_previous) * 100
+        revenue_per_share_latest = metrics[0].get("revenuePerShare")
+        revenue_per_share_previous = metrics[1].get("revenuePerShare")
+
+        if revenue_per_share_latest and revenue_per_share_previous:
+            return ((revenue_per_share_latest - revenue_per_share_previous) / revenue_per_share_previous) * 100
     return None
 
 # 📌 Ratio explanations WITH benchmarks
@@ -67,12 +73,12 @@ GROWTH_GUIDANCE = {
     "operatingCashFlowGrowth": ("Operating Cash Flow Growth", "Consistent growth indicates strong business fundamentals."),
 }
 
-# 📌 Sidebar Navigation (Kept Everything Else Unchanged)
+# 📌 Sidebar Navigation
 st.sidebar.title("📊 Navigation")
 page = st.sidebar.radio("Choose a Screener", ["Valuation Dashboard", "Growth Stock Screener"])
 
 # ===========================================
-# 📌 STOCK VALUATION DASHBOARD (Original Code, Unchanged)
+# 📌 STOCK VALUATION DASHBOARD (Unchanged)
 # ===========================================
 if page == "Valuation Dashboard":
     st.title("📈 Stock Valuation Dashboard")
@@ -117,7 +123,7 @@ if page == "Valuation Dashboard":
             st.error("Could not fetch data for the given ticker.")
 
 # ===========================================
-# 📌 GROWTH STOCK SCREENER (Updated with Revenue Growth)
+# 📌 GROWTH STOCK SCREENER (Fixed & Debugged)
 # ===========================================
 elif page == "Growth Stock Screener":
     st.title("🚀 Growth Stock Screener")
@@ -147,4 +153,5 @@ elif page == "Growth Stock Screener":
 
         else:
             st.error("❌ Growth metrics not available for this stock.")
+
 
