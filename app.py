@@ -6,21 +6,6 @@ import pandas as pd
 API_KEY = st.secrets["fmp"]["api_key"]
 BASE_URL = "https://financialmodelingprep.com/api/v3"
 
-# Mapping to ensure sector names match between APIs
-SECTOR_MAPPING = {
-    "Financial Services": "Financials",
-    "Health Care": "Healthcare",
-    "Technology": "Technology",
-    "Consumer Cyclical": "Consumer Cyclical",
-    "Consumer Defensive": "Consumer Defensive",
-    "Industrials": "Industrials",
-    "Basic Materials": "Basic Materials",
-    "Energy": "Energy",
-    "Utilities": "Utilities",
-    "Real Estate": "Real Estate",
-    "Communication Services": "Communication Services"
-}
-
 # Function to fetch DCF valuation
 def get_dcf(ticker):
     url = f"{BASE_URL}/discounted-cash-flow/{ticker}?apikey={API_KEY}"
@@ -46,17 +31,25 @@ def get_company_sector(ticker):
     data = response.json()
     if data and isinstance(data, list) and len(data) > 0:
         sector = data[0].get("sector", "").strip()
-        mapped_sector = SECTOR_MAPPING.get(sector, sector)  # Map sector correctly
-        return mapped_sector
+        print(f"\n✅ Stock: {ticker}, Sector Identified: {sector}")  # Debugging sector name
+        return sector  # Use exact API sector name
     return "Unknown"
 
 # Function to fetch ALL sector P/E ratios at once
-def get_sector_pe():
-    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date=latest&apikey={API_KEY}"
+def get_sector_pe(date="latest"):
+    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={date}&apikey={API_KEY}"
     response = requests.get(url)
     data = response.json()
+
     if data and isinstance(data, list):
-        return {item["sector"].strip(): float(item["pe"]) for item in data}  # Store all P/E ratios in a dict
+        pe_dict = {item["sector"].strip(): float(item["pe"]) for item in data}  # Store all P/E ratios in a dict
+
+        # Print sector P/E data for debugging
+        print("\n✅ Fetched Sector P/E Data:")
+        for sector, pe in pe_dict.items():
+            print(f"  Sector: {sector}, P/E: {pe}")
+
+        return pe_dict
     return {}
 
 # Streamlit UI
@@ -95,7 +88,7 @@ if st.button("Analyze"):
             st.write(f"**Debt to Equity**: {ratios_data.get('debtEquityRatio', 'N/A')}")
             st.write(f"**Return on Equity (ROE)**: {ratios_data.get('returnOnEquity', 'N/A')}")
 
-            # Get the sector P/E
+            # Get the sector P/E using the exact sector name
             sector_pe = sector_pe_data.get(sector)
 
             if sector_pe:
@@ -114,3 +107,4 @@ if st.button("Analyze"):
                 st.error(f"Sector P/E ratio for **{sector}** not available for comparison.")
         else:
             st.error("Could not fetch data for the given ticker. Please check and try again.")
+
