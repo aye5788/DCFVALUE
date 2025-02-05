@@ -38,6 +38,15 @@ def get_sector_pe(date=TODAY_DATE):
     data = response.json()
     return {item["sector"].strip(): float(item["pe"]) for item in data} if data and isinstance(data, list) else {}
 
+# Explanations for financial ratios
+RATIO_EXPLANATIONS = {
+    "P/E Ratio": "Price-to-Earnings (P/E) Ratio indicates how much investors are willing to pay per dollar of earnings.",
+    "Current Ratio": "Current Ratio measures a company's ability to pay short-term obligations with short-term assets.",
+    "Quick Ratio": "Quick Ratio assesses liquidity by excluding inventory from assets.",
+    "Debt to Equity": "Debt to Equity Ratio compares a company's total liabilities to shareholder equity, indicating leverage.",
+    "Return on Equity (ROE)": "Return on Equity shows how efficiently a company generates profits from shareholders' equity."
+}
+
 # Streamlit UI
 st.title("Stock Valuation Dashboard")
 
@@ -61,17 +70,19 @@ if st.button("Analyze") and ticker:
         with col2:
             st.metric("Stock Price", f"${dcf_data['Stock Price']:.2f}")
 
-        # Display financial ratios
+        # Display financial ratios with explanations
         st.subheader("Key Financial Ratios")
-        stock_pe = ratios_data.get("priceEarningsRatio")
-        st.write(f"**P/E Ratio**: {stock_pe}")
-        st.write(f"**Current Ratio**: {ratios_data.get('currentRatio', 'N/A')}")
-        st.write(f"**Quick Ratio**: {ratios_data.get('quickRatio', 'N/A')}")
-        st.write(f"**Debt to Equity**: {ratios_data.get('debtEquityRatio', 'N/A')}")
-        st.write(f"**Return on Equity (ROE)**: {ratios_data.get('returnOnEquity', 'N/A')}")
+        for ratio, explanation in RATIO_EXPLANATIONS.items():
+            value = ratios_data.get(ratio.lower().replace(" ", ""), "N/A")
+            if value != "N/A":
+                if "Return on Equity" in ratio:
+                    value = f"{value * 100:.2f}%"  # Convert to percentage
+                st.write(f"**{ratio}**: {value}  \n*{explanation}*")
 
         # Get sector P/E and compare
         sector_pe = sector_pe_data.get(sector)
+        stock_pe = ratios_data.get("priceEarningsRatio")
+
         if sector_pe:
             st.subheader("P/E Ratio Comparison")
             col3, col4 = st.columns(2)
@@ -88,5 +99,4 @@ if st.button("Analyze") and ticker:
             st.error(f"Sector P/E ratio for **{sector}** not available for comparison.")
     else:
         st.error("Could not fetch data for the given ticker. Please check and try again.")
-
 
