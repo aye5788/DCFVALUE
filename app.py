@@ -25,6 +25,12 @@ def get_sector_pe(date=TODAY_DATE):
     response = requests.get(url)
     return {item["sector"].strip(): float(item["pe"]) for item in response.json()}
 
+# 📌 New function to fetch **Growth Metrics**
+def get_growth_metrics(ticker):
+    url = f"{BASE_URL}/key-metrics/{ticker}?limit=1&apikey={API_KEY}"
+    response = requests.get(url)
+    return response.json()[0] if response.status_code == 200 else None
+
 # Ratio explanations WITH benchmarks
 RATIO_GUIDANCE = {
     "priceEarningsRatio": ("Price-to-Earnings (P/E) Ratio", 
@@ -39,6 +45,15 @@ RATIO_GUIDANCE = {
                        "Above 15% = strong, 10-15% = average, below 10% = weak.")
 }
 
+# 📌 New Growth Screener Benchmarks
+GROWTH_GUIDANCE = {
+    "revenueGrowth": ("Revenue Growth (YoY)", "Above 20% = strong, 10-20% = average, below 10% = weak."),
+    "priceToSalesRatio": ("Price-to-Sales (P/S) Ratio", "Lower is better, but high P/S may be justified by strong growth."),
+    "enterpriseValueOverRevenue": ("EV/Revenue", "Used to value high-growth companies; compare to sector."),
+    "grossProfitMargin": ("Gross Margin (%)", "Above 50% = strong pricing power and scalability."),
+    "freeCashFlowPerShare": ("Free Cash Flow Per Share", "A positive and growing FCF is ideal for long-term sustainability."),
+}
+
 # Streamlit UI
 st.title("📈 Stock Valuation Dashboard")
 
@@ -49,6 +64,7 @@ if st.button("Analyze") and ticker:
     dcf_data = get_dcf(ticker)
     ratios_data = get_ratios(ticker)
     sector_pe_data = get_sector_pe()
+    growth_data = get_growth_metrics(ticker)  # 📌 Fetch Growth Metrics
 
     if dcf_data and ratios_data:
         st.subheader(f"Valuation Metrics for {ticker}")
@@ -82,6 +98,22 @@ if st.button("Analyze") and ticker:
                 st.success(f"✅ {ticker} has a lower P/E than its sector. It may be undervalued.")
         else:
             st.error(f"Sector P/E ratio for **{sector}** not available.")
+
+        # 📌 Growth Metrics Section
+        if growth_data:
+            st.subheader(f"🚀 Growth Metrics for {ticker}")
+
+            for key, (title, guidance) in GROWTH_GUIDANCE.items():
+                if key in growth_data:
+                    value = growth_data[key]
+                    if "Margin" in title or "Growth" in title:
+                        value = f"{value * 100:.2f}%"  # Convert to percentage
+                    else:
+                        value = f"{value:.2f}"
+                    st.markdown(f"**{title}:** {value}  \n*{guidance}*")
+
+        else:
+            st.error("❌ Growth metrics not available for this stock.")
     else:
         st.error("Could not fetch data for the given ticker.")
 
