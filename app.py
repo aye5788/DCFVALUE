@@ -150,7 +150,6 @@ if page == "Valuation Dashboard":
                     except Exception:
                         st.markdown(f"**{title}:** {ratios_data[key]}  \n*{guidance}*")
 
-            # Example: Displaying P/E ratio
             stock_pe = ratios_data.get("priceEarningsRatio")
             if stock_pe is not None:
                 st.subheader("📊 P/E Ratio")
@@ -185,12 +184,15 @@ elif page == "Growth Stock Screener":
         operating_cf_growth = compute_operating_cf_growth(cash_flow_data)
 
         # Use evToSales from the ratios endpoint as EV/Revenue (alias)
-        ev_revenue = ratios_data.get("evToSales") if ratios_data else "N/A"
+        ev_revenue = ratios_data.get("evToSales") if ratios_data else None
+
+        # Prepare display value for EV/Revenue to avoid TypeError
+        ev_revenue_display = f"{float(ev_revenue):.2f}" if ev_revenue not in [None, "N/A"] else "N/A"
 
         # Display the computed and available metrics:
         st.markdown(f"**Revenue Growth (YoY):** {f'{revenue_growth:.2f}%' if revenue_growth is not None else 'N/A'}  \n*Above 20% = strong, 10-20% = average, below 10% = weak.*")
         st.markdown(f"**Price-to-Sales (P/S) Ratio:** {ratios_data.get('priceToSalesRatio', 'N/A') if ratios_data else 'N/A'}  \n*Lower is better, but high P/S may be justified by strong growth.*")
-        st.markdown(f"**EV/Revenue:** {f'{float(ev_revenue):.2f}' if ev_revenue != 'N/A' else 'N/A'}  \n*Used to value high-growth companies; compare to sector.*")
+        st.markdown(f"**EV/Revenue:** {ev_revenue_display}  \n*Used to value high-growth companies; compare to sector.*")
         st.markdown(f"**Gross Margin (%):** {f'{gross_profit_margin:.2f}' if gross_profit_margin is not None else 'N/A'}  \n*Above 50% = strong pricing power and scalability.*")
         st.markdown(f"**Free Cash Flow Per Share:** {ratios_data.get('freeCashFlowPerShare', 'N/A') if ratios_data else 'N/A'}  \n*A positive and growing FCF is ideal for long-term sustainability.*")
         st.markdown(f"**Operating Cash Flow Growth:** {f'{operating_cf_growth:.2f}%' if operating_cf_growth is not None else 'N/A'}  \n*Consistent growth indicates strong business fundamentals.*")
