@@ -13,13 +13,21 @@ TODAY_DATE = datetime.today().strftime("%Y-%m-%d")
 # Data Fetching Functions
 # -----------------------------------------------------------------------------
 def get_dcf(ticker):
-    """Fetch discounted cash flow data for the given ticker."""
+    """
+    Fetch discounted cash flow data for the given ticker.
+    The API response may be a list or a dictionary depending on recent updates.
+    """
     url = f"{BASE_URL}/discounted-cash-flow/{ticker}?apikey={API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        if data and len(data) > 0:
-            return data[0]
+        # If the response is a list, return the first item if available.
+        if isinstance(data, list):
+            if len(data) > 0:
+                return data[0]
+        # Otherwise, if it’s a dictionary, return it directly.
+        elif isinstance(data, dict) and data:
+            return data
     return None
 
 def get_ratios(ticker):
@@ -28,8 +36,10 @@ def get_ratios(ticker):
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        if data and len(data) > 0:
+        if isinstance(data, list) and len(data) > 0:
             return data[0]
+        elif isinstance(data, dict) and data:
+            return data
     return None
 
 def get_company_sector(ticker):
@@ -38,8 +48,10 @@ def get_company_sector(ticker):
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        if data and len(data) > 0:
+        if isinstance(data, list) and len(data) > 0:
             return data[0].get("sector", "").strip()
+        elif isinstance(data, dict) and data:
+            return data.get("sector", "").strip()
     return None
 
 @st.cache_data(ttl=0)
@@ -181,8 +193,10 @@ if page == "Valuation Dashboard":
             st.subheader(f"Valuation Metrics for {ticker}")
 
             col1, col2 = st.columns(2)
-            col1.metric("💰 DCF Valuation", f"${dcf_data.get('dcf', 0):.2f}")
-            col2.metric("📊 Stock Price", f"${dcf_data.get('Stock Price', 0):.2f}")
+            # Note: Depending on the API response, the key for the stock price might be
+            # 'Stock Price' or 'stockPrice'. Adjust if necessary.
+            col1.metric("💰 DCF Valuation", f"${float(dcf_data.get('dcf', 0)):.2f}")
+            col2.metric("📊 Stock Price", f"${float(dcf_data.get('Stock Price', 0)):.2f}")
 
             st.subheader("📊 Key Financial Ratios")
             for key, (title, guidance) in RATIO_GUIDANCE.items():
@@ -243,5 +257,4 @@ elif page == "Growth Stock Screener":
                 else:
                     value = key_metrics[0].get(key, "N/A")
                 st.markdown(f"**{title}:** {value}  \n*{guidance}*")
-
 
