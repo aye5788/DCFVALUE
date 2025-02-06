@@ -45,6 +45,26 @@ def get_company_sector(ticker):
             return data.get("sector", "").strip()
     return None
 
+# New function: Get Sector P/E for a given sector.
+@st.cache_data(ttl=0)
+def get_sector_pe_for(sector, date=TODAY_DATE):
+    """
+    Fetch the P/E ratio for a specific sector for the given date.
+    The endpoint returns data for all sectors; we return the one matching the given sector.
+    """
+    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={date}&apikey={API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        if data:
+            for item in data:
+                if item.get("sector", "").strip() == sector:
+                    try:
+                        return float(item["pe"])
+                    except (TypeError, ValueError):
+                        return None
+    return None
+
 # Additional endpoints for computing growth metrics:
 def get_income_statement(ticker, limit=3):
     url = f"{BASE_URL}/income-statement/{ticker}?limit={limit}&apikey={API_KEY}"
@@ -70,7 +90,7 @@ def get_cash_flow_statement(ticker, limit=3):
 def compute_revenue_growth(income_data):
     """
     Compute YoY revenue growth using the first two valid (nonzero) revenue values.
-    Note: The income statement now returns the revenue value under the key 'revenue'.
+    Note: The income statement now returns revenue under the key 'revenue'.
     """
     if income_data:
         valid_revenues = []
@@ -144,7 +164,7 @@ GROWTH_GUIDANCE = {
     "grossProfitMargin": ("Gross Margin (%)", "Above 50% = strong pricing power and scalability."),
     "freeCashFlowPerShare": ("Free Cash Flow Per Share", "A positive and growing FCF is ideal for long-term sustainability."),
     "operatingCFGrowth": ("Operating Cash Flow Growth", "Consistent growth indicates strong business fundamentals.")
-    # You can add more if desired, but we'll exclude the consistently missing ones.
+    # We are excluding metrics that consistently return N/A.
 }
 
 # -----------------------------------------------------------------------------
@@ -154,7 +174,7 @@ st.sidebar.title("📊 Navigation")
 page = st.sidebar.radio("Choose a Screener", ["Valuation Dashboard", "Growth Stock Screener"])
 
 # -----------------------------------------------------------------------------
-# Valuation Dashboard (Unchanged)
+# Valuation Dashboard (Unchanged, with Sector P/E Comparison restored)
 # -----------------------------------------------------------------------------
 if page == "Valuation Dashboard":
     st.title("📈 Stock Valuation Dashboard")
@@ -182,12 +202,23 @@ if page == "Valuation Dashboard":
                     except Exception:
                         st.markdown(f"**{title}:** {ratios_data[key]}  \n*{guidance}*")
             
-            stock_pe = ratios_data.get("priceEarningsRatio")
-            if stock_pe is not None:
-                st.subheader("📊 P/E Ratio")
-                st.metric(f"{ticker} P/E", f"{float(stock_pe):.2f}")
+            # Sector P/E comparison:
+            if sector:
+                sector_pe = get_sector_pe_for(sector)
+                stock_pe = ratios_data.get("priceEarningsRatio", None)
+                if sector_pe is not None and stock_pe is not None:
+                    st.subheader("📊 P/E Ratio Comparison")
+                    col3, col4 = st.columns(2)
+                    col3.metric(f"{ticker} P/E", f"{float(stock_pe):.2f}")
+                    col4.metric(f"{sector} Sector P/E", f"{float(sector_pe):.2f}")
+                    if float(stock_pe) > float(sector_pe):
+                        st.warning(f"⚠️ {ticker} has a higher P/E than its sector ({sector}). It may be overvalued.")
+                    else:
+                        st.success(f"✅ {ticker} has a lower P/E than its sector ({sector}). It may be undervalued.")
+                else:
+                    st.error(f"Sector P/E ratio for {sector} is not available.")
             else:
-                st.error(f"P/E Ratio data not available for {ticker}.")
+                st.error("Sector information is not available for this ticker.")
 
 # -----------------------------------------------------------------------------
 # Growth Stock Screener (Modified for Growth Metrics)
@@ -244,6 +275,6 @@ elif page == "Growth Stock Screener":
             "Operating Cash Flow Growth": "Consistent growth indicates strong business fundamentals."
         }
         
-        # Display only the metrics that are available
         for label, value in metrics.items():
             st.markdown(f"**{label}:** {value}  \n*{guidance_text.get(label, '')}*")
+
