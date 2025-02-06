@@ -181,25 +181,31 @@ if page == "Valuation Dashboard":
         dcf_data = get_dcf(ticker)
         ratios_data = get_ratios(ticker)
         
-        if not dcf_data or not ratios_data:
-            st.error(f"Could not retrieve all required data for ticker {ticker}. Please verify the ticker symbol or try again later.")
+        if not dcf_data and not ratios_data:
+            st.error(f"Could not retrieve any required data for ticker {ticker}. Please verify the ticker symbol or try again later.")
         else:
             st.subheader(f"Valuation Metrics for {ticker}")
             col1, col2 = st.columns(2)
-            col1.metric("💰 DCF Valuation", f"${float(dcf_data.get('dcf', 0)):.2f}")
-            col2.metric("📊 Stock Price", f"${float(dcf_data.get('Stock Price', 0)):.2f}")
+            if dcf_data:
+                col1.metric("💰 DCF Valuation", f"${float(dcf_data.get('dcf', 0)):.2f}")
+                col2.metric("📊 Stock Price", f"${float(dcf_data.get('Stock Price', 0)):.2f}")
+            else:
+                st.warning("DCF data not available.")
             
-            st.subheader("📊 Key Financial Ratios")
-            for key, (title, guidance) in RATIO_GUIDANCE.items():
-                if key in ratios_data:
-                    try:
-                        value = float(ratios_data[key])
-                        st.markdown(f"**{title}:** {value:.2f}  \n*{guidance}*")
-                    except Exception:
-                        st.markdown(f"**{title}:** {ratios_data[key]}  \n*{guidance}*")
+            if ratios_data:
+                st.subheader("📊 Key Financial Ratios")
+                for key, (title, guidance) in RATIO_GUIDANCE.items():
+                    if key in ratios_data:
+                        try:
+                            value = float(ratios_data[key])
+                            st.markdown(f"**{title}:** {value:.2f}  \n*{guidance}*")
+                        except Exception:
+                            st.markdown(f"**{title}:** {ratios_data[key]}  \n*{guidance}*")
+            else:
+                st.warning("Ratios data not available.")
             
             # Sector P/E comparison:
-            if sector:
+            if sector and ratios_data:
                 sector_pe_data = get_sector_pe()
                 matched_pe = None
                 # Search for a matching sector (case-insensitive)
@@ -220,7 +226,7 @@ if page == "Valuation Dashboard":
                 else:
                     st.error(f"Sector P/E ratio for {sector} is not available.")
             else:
-                st.error("Sector information is not available for this ticker.")
+                st.error("Sector information or ratios data is not available for this ticker.")
 
 # -----------------------------------------------------------------------------
 # Growth Stock Screener (Modified for Growth Metrics)
@@ -279,3 +285,4 @@ elif page == "Growth Stock Screener":
         
         for label, value in metrics.items():
             st.markdown(f"**{label}:** {value}  \n*{guidance_text.get(label, '')}*")
+
