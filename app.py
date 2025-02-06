@@ -176,16 +176,6 @@ if page == "Valuation Dashboard":
         ratios_data = get_ratios(ticker)
         sector_pe = get_sector_pe_for(sector) if sector else None
 
-        # -----------------------------
-        # Debug Information (optional)
-        # -----------------------------
-        st.write("**Debug Info:**")
-        st.write("Ticker:", ticker)
-        st.write("Sector:", sector)
-        st.write("DCF Data:", dcf_data)
-        st.write("Ratios Data:", ratios_data)
-        st.write(f"{sector} Sector P/E:", sector_pe)
-
         # Check if we got the required data
         if not dcf_data or not ratios_data:
             st.error(
@@ -196,7 +186,6 @@ if page == "Valuation Dashboard":
             st.subheader(f"Valuation Metrics for {ticker}")
 
             col1, col2 = st.columns(2)
-            # Adjust the keys if needed; here we assume the keys 'dcf' and 'Stock Price'
             col1.metric("💰 DCF Valuation", f"${float(dcf_data.get('dcf', 0)):.2f}")
             col2.metric("📊 Stock Price", f"${float(dcf_data.get('Stock Price', 0)):.2f}")
 
@@ -234,13 +223,6 @@ elif page == "Growth Stock Screener":
     if st.button("Analyze Growth") and ticker:
         key_metrics = get_key_metrics(ticker)
         revenue_growth = compute_revenue_growth(key_metrics)
-
-        # -----------------------------
-        # Debug Information (optional)
-        # -----------------------------
-        st.write("**Debug Info:**")
-        st.write("Ticker:", ticker)
-        st.write("Key Metrics:", key_metrics)
 
         if not key_metrics:
             st.error(
