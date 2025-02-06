@@ -7,7 +7,6 @@ from datetime import datetime
 # -----------------------------------------------------------------------------
 API_KEY = st.secrets["fmp"]["api_key"]
 BASE_URL = "https://financialmodelingprep.com/api/v3"
-TODAY_DATE = datetime.today().strftime("%Y-%m-%d")
 
 # -----------------------------------------------------------------------------
 # Data Fetching Functions (FMP Endpoints)
@@ -45,14 +44,14 @@ def get_company_sector(ticker):
             return data.get("sector", "").strip()
     return None
 
-# New function: Get all sectors' P/E ratios as a dictionary.
-@st.cache_data(ttl=3600)
+# New function: Get all sectors' P/E ratios as a dictionary using the current date
 def get_sector_pe():
-    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={TODAY_DATE}&apikey={API_KEY}"
+    current_date = datetime.today().strftime("%Y-%m-%d")
+    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={current_date}&apikey={API_KEY}"
     response = requests.get(url)
+    result = {}
     if response.status_code == 200:
         data = response.json()
-        result = {}
         if data:
             for item in data:
                 sector_name = item.get("sector", "").strip()
@@ -61,8 +60,7 @@ def get_sector_pe():
                 except (TypeError, ValueError):
                     pe_value = None
                 result[sector_name] = pe_value
-        return result
-    return {}
+    return result
 
 # Additional endpoints for computing growth metrics:
 def get_income_statement(ticker, limit=3):
