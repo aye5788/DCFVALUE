@@ -46,7 +46,7 @@ def get_company_sector(ticker):
     return None
 
 # Additional endpoints for computing growth metrics:
-def get_income_statement(ticker, limit=2):
+def get_income_statement(ticker, limit=3):
     url = f"{BASE_URL}/income-statement/{ticker}?limit={limit}&apikey={API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
@@ -55,7 +55,7 @@ def get_income_statement(ticker, limit=2):
             return data
     return None
 
-def get_cash_flow_statement(ticker, limit=2):
+def get_cash_flow_statement(ticker, limit=3):
     url = f"{BASE_URL}/cash-flow-statement/{ticker}?limit={limit}&apikey={API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
@@ -65,31 +65,57 @@ def get_cash_flow_statement(ticker, limit=2):
     return None
 
 # -----------------------------------------------------------------------------
-# Helper Functions to Compute Growth Metrics
+# Helper Functions to Compute Growth Metrics (Updated to search multiple periods)
 # -----------------------------------------------------------------------------
 def compute_revenue_growth(income_data):
-    if income_data and len(income_data) >= 2:
-        latest_revenue = float(income_data[0].get("totalRevenue", 0))
-        previous_revenue = float(income_data[1].get("totalRevenue", 0))
-        if previous_revenue > 0:
-            return ((latest_revenue - previous_revenue) / previous_revenue) * 100
+    """Compute YoY revenue growth using the first two valid (nonzero) totalRevenue values."""
+    if income_data:
+        valid_revenues = []
+        for period in income_data:
+            rev = period.get("totalRevenue", None)
+            try:
+                rev_val = float(rev)
+            except (TypeError, ValueError):
+                rev_val = 0
+            if rev_val > 0:
+                valid_revenues.append(rev_val)
+            if len(valid_revenues) >= 2:
+                break
+        if len(valid_revenues) >= 2:
+            latest = valid_revenues[0]
+            previous = valid_revenues[1]
+            return ((latest - previous) / previous) * 100
     return None
 
 def compute_gross_profit_margin(income_data):
+    """Compute the gross profit margin (%) from the latest income statement data."""
     if income_data and len(income_data) > 0:
         latest = income_data[0]
-        total_revenue = float(latest.get("totalRevenue", 0))
-        gross_profit = float(latest.get("grossProfit", 0))
+        try:
+            total_revenue = float(latest.get("totalRevenue", 0))
+            gross_profit = float(latest.get("grossProfit", 0))
+        except (TypeError, ValueError):
+            return None
         if total_revenue > 0:
             return (gross_profit / total_revenue) * 100
     return None
 
 def compute_operating_cf_growth(cash_flow_data):
-    if cash_flow_data and len(cash_flow_data) >= 2:
-        latest_cf = float(cash_flow_data[0].get("operatingCashFlow", 0))
-        previous_cf = float(cash_flow_data[1].get("operatingCashFlow", 0))
-        if previous_cf > 0:
-            return ((latest_cf - previous_cf) / previous_cf) * 100
+    """Compute YoY operating cash flow growth using the first two valid operatingCashFlow values."""
+    if cash_flow_data:
+        valid_cf = []
+        for period in cash_flow_data:
+            cf = period.get("operatingCashFlow", None)
+            try:
+                cf_val = float(cf)
+            except (TypeError, ValueError):
+                cf_val = 0
+            if cf_val > 0:
+                valid_cf.append(cf_val)
+            if len(valid_cf) >= 2:
+                break
+        if len(valid_cf) >= 2:
+            return ((valid_cf[0] - valid_cf[1]) / valid_cf[1]) * 100
     return None
 
 # -----------------------------------------------------------------------------
@@ -127,12 +153,12 @@ page = st.sidebar.radio("Choose a Screener", ["Valuation Dashboard", "Growth Sto
 if page == "Valuation Dashboard":
     st.title("📈 Stock Valuation Dashboard")
     ticker = st.text_input("Enter stock ticker:").upper()
-
+    
     if st.button("Analyze") and ticker:
         sector = get_company_sector(ticker)
         dcf_data = get_dcf(ticker)
         ratios_data = get_ratios(ticker)
-
+        
         if not dcf_data or not ratios_data:
             st.error(f"Could not retrieve all required data for ticker {ticker}. Please verify the ticker symbol or try again later.")
         else:
@@ -140,7 +166,7 @@ if page == "Valuation Dashboard":
             col1, col2 = st.columns(2)
             col1.metric("💰 DCF Valuation", f"${float(dcf_data.get('dcf', 0)):.2f}")
             col2.metric("📊 Stock Price", f"${float(dcf_data.get('Stock Price', 0)):.2f}")
-
+            
             st.subheader("📊 Key Financial Ratios")
             for key, (title, guidance) in RATIO_GUIDANCE.items():
                 if key in ratios_data:
@@ -149,7 +175,7 @@ if page == "Valuation Dashboard":
                         st.markdown(f"**{title}:** {value:.2f}  \n*{guidance}*")
                     except Exception:
                         st.markdown(f"**{title}:** {ratios_data[key]}  \n*{guidance}*")
-
+            
             stock_pe = ratios_data.get("priceEarningsRatio")
             if stock_pe is not None:
                 st.subheader("📊 P/E Ratio")
@@ -163,7 +189,7 @@ if page == "Valuation Dashboard":
 elif page == "Growth Stock Screener":
     st.title("🚀 Growth Stock Screener")
     ticker = st.text_input("Enter stock ticker for growth analysis:").upper()
-
+    
     if st.button("Analyze Growth") and ticker:
         # Fetch ratios from the Key Metrics endpoint
         ratios_url = f"{BASE_URL}/ratios/{ticker}?period=annual&limit=1&apikey={API_KEY}"
@@ -173,22 +199,20 @@ elif page == "Growth Stock Screener":
             data = ratios_response.json()
             if data and isinstance(data, list) and len(data) > 0:
                 ratios_data = data[0]
-
-        # Fetch historical income statement and cash flow data (using 2 periods)
-        income_data = get_income_statement(ticker, limit=2)
-        cash_flow_data = get_cash_flow_statement(ticker, limit=2)
-
+        
+        # Fetch historical income statement and cash flow data (using 3 periods)
+        income_data = get_income_statement(ticker, limit=3)
+        cash_flow_data = get_cash_flow_statement(ticker, limit=3)
+        
         # Compute the missing growth metrics
         revenue_growth = compute_revenue_growth(income_data)
         gross_profit_margin = compute_gross_profit_margin(income_data)
         operating_cf_growth = compute_operating_cf_growth(cash_flow_data)
-
+        
         # Use evToSales from the ratios endpoint as EV/Revenue (alias)
         ev_revenue = ratios_data.get("evToSales") if ratios_data else None
-
-        # Prepare display value for EV/Revenue to avoid TypeError
         ev_revenue_display = f"{float(ev_revenue):.2f}" if ev_revenue not in [None, "N/A"] else "N/A"
-
+        
         # Display the computed and available metrics:
         st.markdown(f"**Revenue Growth (YoY):** {f'{revenue_growth:.2f}%' if revenue_growth is not None else 'N/A'}  \n*Above 20% = strong, 10-20% = average, below 10% = weak.*")
         st.markdown(f"**Price-to-Sales (P/S) Ratio:** {ratios_data.get('priceToSalesRatio', 'N/A') if ratios_data else 'N/A'}  \n*Lower is better, but high P/S may be justified by strong growth.*")
