@@ -65,14 +65,17 @@ def get_cash_flow_statement(ticker, limit=3):
     return None
 
 # -----------------------------------------------------------------------------
-# Helper Functions to Compute Growth Metrics (Updated to search multiple periods)
+# Helper Functions to Compute Growth Metrics (Updated)
 # -----------------------------------------------------------------------------
 def compute_revenue_growth(income_data):
-    """Compute YoY revenue growth using the first two valid (nonzero) totalRevenue values."""
+    """
+    Compute YoY revenue growth using the first two valid (nonzero) revenue values.
+    Note: The key is 'revenue' (not 'totalRevenue').
+    """
     if income_data:
         valid_revenues = []
         for period in income_data:
-            rev = period.get("totalRevenue", None)
+            rev = period.get("revenue", None)
             try:
                 rev_val = float(rev)
             except (TypeError, ValueError):
@@ -88,20 +91,25 @@ def compute_revenue_growth(income_data):
     return None
 
 def compute_gross_profit_margin(income_data):
-    """Compute the gross profit margin (%) from the latest income statement data."""
+    """
+    Compute the gross profit margin (%) from the latest income statement data.
+    Uses 'revenue' and 'grossProfit' keys.
+    """
     if income_data and len(income_data) > 0:
         latest = income_data[0]
         try:
-            total_revenue = float(latest.get("totalRevenue", 0))
+            revenue_val = float(latest.get("revenue", 0))
             gross_profit = float(latest.get("grossProfit", 0))
         except (TypeError, ValueError):
             return None
-        if total_revenue > 0:
-            return (gross_profit / total_revenue) * 100
+        if revenue_val > 0:
+            return (gross_profit / revenue_val) * 100
     return None
 
 def compute_operating_cf_growth(cash_flow_data):
-    """Compute YoY operating cash flow growth using the first two valid operatingCashFlow values."""
+    """
+    Compute YoY operating cash flow growth using the first two valid operatingCashFlow values.
+    """
     if cash_flow_data:
         valid_cf = []
         for period in cash_flow_data:
@@ -200,7 +208,7 @@ elif page == "Growth Stock Screener":
             if data and isinstance(data, list) and len(data) > 0:
                 ratios_data = data[0]
         
-        # Fetch historical income statement and cash flow data (using 3 periods)
+        # Fetch historical income statement and cash flow data (using up to 3 periods)
         income_data = get_income_statement(ticker, limit=3)
         cash_flow_data = get_cash_flow_statement(ticker, limit=3)
         
