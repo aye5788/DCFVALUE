@@ -70,7 +70,7 @@ def get_cash_flow_statement(ticker, limit=3):
 def compute_revenue_growth(income_data):
     """
     Compute YoY revenue growth using the first two valid (nonzero) revenue values.
-    Note: The key is 'revenue' (not 'totalRevenue').
+    Note: The income statement now returns the revenue value under the key 'revenue'.
     """
     if income_data:
         valid_revenues = []
@@ -93,7 +93,7 @@ def compute_revenue_growth(income_data):
 def compute_gross_profit_margin(income_data):
     """
     Compute the gross profit margin (%) from the latest income statement data.
-    Uses 'revenue' and 'grossProfit' keys.
+    Uses the keys 'revenue' and 'grossProfit'.
     """
     if income_data and len(income_data) > 0:
         latest = income_data[0]
@@ -143,10 +143,8 @@ GROWTH_GUIDANCE = {
     "evToSales": ("EV/Revenue", "Used to value high-growth companies; compare to sector."),
     "grossProfitMargin": ("Gross Margin (%)", "Above 50% = strong pricing power and scalability."),
     "freeCashFlowPerShare": ("Free Cash Flow Per Share", "A positive and growing FCF is ideal for long-term sustainability."),
-    "operatingCFGrowth": ("Operating Cash Flow Growth", "Consistent growth indicates strong business fundamentals."),
-    "enterpriseValueOverEBITDA": ("EV/EBITDA", "Enterprise Value over EBITDA; lower values indicate undervaluation."),
-    "evToOperatingCashFlow": ("EV/Operating Cash Flow", "Measures how expensive a company is relative to cash flow."),
-    "freeCashFlowYield": ("Free Cash Flow Yield", "Higher values indicate strong free cash flow compared to market cap."),
+    "operatingCFGrowth": ("Operating Cash Flow Growth", "Consistent growth indicates strong business fundamentals.")
+    # You can add more if desired, but we'll exclude the consistently missing ones.
 }
 
 # -----------------------------------------------------------------------------
@@ -221,14 +219,31 @@ elif page == "Growth Stock Screener":
         ev_revenue = ratios_data.get("evToSales") if ratios_data else None
         ev_revenue_display = f"{float(ev_revenue):.2f}" if ev_revenue not in [None, "N/A"] else "N/A"
         
-        # Display the computed and available metrics:
-        st.markdown(f"**Revenue Growth (YoY):** {f'{revenue_growth:.2f}%' if revenue_growth is not None else 'N/A'}  \n*Above 20% = strong, 10-20% = average, below 10% = weak.*")
-        st.markdown(f"**Price-to-Sales (P/S) Ratio:** {ratios_data.get('priceToSalesRatio', 'N/A') if ratios_data else 'N/A'}  \n*Lower is better, but high P/S may be justified by strong growth.*")
-        st.markdown(f"**EV/Revenue:** {ev_revenue_display}  \n*Used to value high-growth companies; compare to sector.*")
-        st.markdown(f"**Gross Margin (%):** {f'{gross_profit_margin:.2f}' if gross_profit_margin is not None else 'N/A'}  \n*Above 50% = strong pricing power and scalability.*")
-        st.markdown(f"**Free Cash Flow Per Share:** {ratios_data.get('freeCashFlowPerShare', 'N/A') if ratios_data else 'N/A'}  \n*A positive and growing FCF is ideal for long-term sustainability.*")
-        st.markdown(f"**Operating Cash Flow Growth:** {f'{operating_cf_growth:.2f}%' if operating_cf_growth is not None else 'N/A'}  \n*Consistent growth indicates strong business fundamentals.*")
-        st.markdown(f"**EV/Sales:** {ratios_data.get('evToSales', 'N/A') if ratios_data else 'N/A'}  \n*Enterprise Value divided by Revenue; lower is better for undervaluation.*")
-        st.markdown(f"**EV/EBITDA:** {ratios_data.get('enterpriseValueOverEBITDA', 'N/A') if ratios_data else 'N/A'}  \n*Enterprise Value over EBITDA; lower values indicate undervaluation.*")
-        st.markdown(f"**EV/Operating Cash Flow:** {ratios_data.get('evToOperatingCashFlow', 'N/A') if ratios_data else 'N/A'}  \n*Measures how expensive a company is relative to cash flow.*")
-        st.markdown(f"**Free Cash Flow Yield:** {ratios_data.get('freeCashFlowYield', 'N/A') if ratios_data else 'N/A'}  \n*Higher values indicate strong free cash flow compared to market cap.*")
+        # Build a dictionary of metrics to display only if available
+        metrics = {}
+        if revenue_growth is not None:
+            metrics["Revenue Growth (YoY)"] = f"{revenue_growth:.2f}%"
+        if ratios_data and ratios_data.get("priceToSalesRatio"):
+            metrics["Price-to-Sales (P/S) Ratio"] = f"{float(ratios_data.get('priceToSalesRatio')):.2f}"
+        if ev_revenue_display != "N/A":
+            metrics["EV/Revenue"] = ev_revenue_display
+        if gross_profit_margin is not None:
+            metrics["Gross Margin (%)"] = f"{gross_profit_margin:.2f}"
+        if ratios_data and ratios_data.get("freeCashFlowPerShare"):
+            metrics["Free Cash Flow Per Share"] = f"{float(ratios_data.get('freeCashFlowPerShare')):.2f}"
+        if operating_cf_growth is not None:
+            metrics["Operating Cash Flow Growth"] = f"{operating_cf_growth:.2f}%"
+        
+        # Guidance text for each metric
+        guidance_text = {
+            "Revenue Growth (YoY)": "Above 20% = strong, 10-20% = average, below 10% = weak.",
+            "Price-to-Sales (P/S) Ratio": "Lower is better, but high P/S may be justified by strong growth.",
+            "EV/Revenue": "Used to value high-growth companies; compare to sector.",
+            "Gross Margin (%)": "Above 50% = strong pricing power and scalability.",
+            "Free Cash Flow Per Share": "A positive and growing FCF is ideal for long-term sustainability.",
+            "Operating Cash Flow Growth": "Consistent growth indicates strong business fundamentals."
+        }
+        
+        # Display only the metrics that are available
+        for label, value in metrics.items():
+            st.markdown(f"**{label}:** {value}  \n*{guidance_text.get(label, '')}*")
