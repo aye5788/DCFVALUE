@@ -45,12 +45,12 @@ def get_company_sector(ticker):
             return data.get("sector", "").strip()
     return None
 
-# New function: Get Sector P/E for a given sector.
+# New function: Get Sector P/E for a given sector (using case-insensitive matching)
 @st.cache_data(ttl=0)
 def get_sector_pe_for(sector, date=TODAY_DATE):
     """
     Fetch the P/E ratio for a specific sector for the given date.
-    The endpoint returns data for all sectors; we return the one matching the given sector.
+    The endpoint returns data for all sectors; we return the one matching the given sector (case-insensitive).
     """
     url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={date}&apikey={API_KEY}"
     response = requests.get(url)
@@ -58,7 +58,8 @@ def get_sector_pe_for(sector, date=TODAY_DATE):
         data = response.json()
         if data:
             for item in data:
-                if item.get("sector", "").strip() == sector:
+                # Use case-insensitive comparison
+                if item.get("sector", "").strip().lower() == sector.lower():
                     try:
                         return float(item["pe"])
                     except (TypeError, ValueError):
@@ -90,7 +91,7 @@ def get_cash_flow_statement(ticker, limit=3):
 def compute_revenue_growth(income_data):
     """
     Compute YoY revenue growth using the first two valid (nonzero) revenue values.
-    Note: The income statement now returns revenue under the key 'revenue'.
+    Note: The income statement returns revenue under the key 'revenue'.
     """
     if income_data:
         valid_revenues = []
@@ -164,7 +165,6 @@ GROWTH_GUIDANCE = {
     "grossProfitMargin": ("Gross Margin (%)", "Above 50% = strong pricing power and scalability."),
     "freeCashFlowPerShare": ("Free Cash Flow Per Share", "A positive and growing FCF is ideal for long-term sustainability."),
     "operatingCFGrowth": ("Operating Cash Flow Growth", "Consistent growth indicates strong business fundamentals.")
-    # We are excluding metrics that consistently return N/A.
 }
 
 # -----------------------------------------------------------------------------
