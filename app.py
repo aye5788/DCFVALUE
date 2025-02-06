@@ -15,17 +15,14 @@ TODAY_DATE = datetime.today().strftime("%Y-%m-%d")
 def get_dcf(ticker):
     """
     Fetch discounted cash flow data for the given ticker.
-    The API response may be a list or a dictionary depending on recent updates.
+    The API response may be a list or a dictionary.
     """
     url = f"{BASE_URL}/discounted-cash-flow/{ticker}?apikey={API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        # If the response is a list, return the first item if available.
-        if isinstance(data, list):
-            if len(data) > 0:
-                return data[0]
-        # Otherwise, if it’s a dictionary, return it directly.
+        if isinstance(data, list) and len(data) > 0:
+            return data[0]
         elif isinstance(data, dict) and data:
             return data
     return None
@@ -55,16 +52,21 @@ def get_company_sector(ticker):
     return None
 
 @st.cache_data(ttl=0)
-def get_sector_pe(date=TODAY_DATE):
-    """Fetch the P/E ratios for sectors for a given date."""
+def get_sector_pe_for(sector, date=TODAY_DATE):
+    """
+    Fetch the P/E ratio for a specific sector for the given date.
+    The API returns all sectors' data, so we filter out only the one that
+    matches the provided sector.
+    """
     url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={date}&apikey={API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
         if data:
-            # Create a dictionary mapping sector names to their P/E ratio
-            return {item["sector"].strip(): float(item["pe"]) for item in data}
-    return {}
+            for item in data:
+                if item.get("sector", "").strip() == sector:
+                    return float(item["pe"])
+    return None
 
 def get_key_metrics(ticker, years=5):
     """Fetch key metrics for the given ticker over the past `years` years."""
@@ -172,7 +174,7 @@ if page == "Valuation Dashboard":
         sector = get_company_sector(ticker)
         dcf_data = get_dcf(ticker)
         ratios_data = get_ratios(ticker)
-        sector_pe_data = get_sector_pe()
+        sector_pe = get_sector_pe_for(sector) if sector else None
 
         # -----------------------------
         # Debug Information (optional)
@@ -182,6 +184,7 @@ if page == "Valuation Dashboard":
         st.write("Sector:", sector)
         st.write("DCF Data:", dcf_data)
         st.write("Ratios Data:", ratios_data)
+        st.write(f"{sector} Sector P/E:", sector_pe)
 
         # Check if we got the required data
         if not dcf_data or not ratios_data:
@@ -193,8 +196,7 @@ if page == "Valuation Dashboard":
             st.subheader(f"Valuation Metrics for {ticker}")
 
             col1, col2 = st.columns(2)
-            # Note: Depending on the API response, the key for the stock price might be
-            # 'Stock Price' or 'stockPrice'. Adjust if necessary.
+            # Adjust the keys if needed; here we assume the keys 'dcf' and 'Stock Price'
             col1.metric("💰 DCF Valuation", f"${float(dcf_data.get('dcf', 0)):.2f}")
             col2.metric("📊 Stock Price", f"${float(dcf_data.get('Stock Price', 0)):.2f}")
 
@@ -204,27 +206,23 @@ if page == "Valuation Dashboard":
                     try:
                         value = float(ratios_data[key])
                         st.markdown(f"**{title}:** {value:.2f}  \n*{guidance}*")
-                    except Exception as e:
+                    except Exception:
                         st.markdown(f"**{title}:** {ratios_data[key]}  \n*{guidance}*")
 
             # Compare the stock's P/E to its sector's P/E (if available)
-            if sector:
-                sector_pe = sector_pe_data.get(sector, None)
-                stock_pe = ratios_data.get("priceEarningsRatio", None)
-                if sector_pe is not None and stock_pe is not None:
-                    st.subheader("📊 P/E Ratio Comparison")
-                    col3, col4 = st.columns(2)
-                    col3.metric(f"{ticker} P/E", f"{float(stock_pe):.2f}")
-                    col4.metric(f"{sector} Sector P/E", f"{float(sector_pe):.2f}")
+            stock_pe = ratios_data.get("priceEarningsRatio", None)
+            if sector and sector_pe is not None and stock_pe is not None:
+                st.subheader("📊 P/E Ratio Comparison")
+                col3, col4 = st.columns(2)
+                col3.metric(f"{ticker} P/E", f"{float(stock_pe):.2f}")
+                col4.metric(f"{sector} Sector P/E", f"{float(sector_pe):.2f}")
 
-                    if float(stock_pe) > float(sector_pe):
-                        st.warning(f"⚠️ {ticker} has a higher P/E than its sector. It may be overvalued.")
-                    else:
-                        st.success(f"✅ {ticker} has a lower P/E than its sector. It may be undervalued.")
+                if float(stock_pe) > float(sector_pe):
+                    st.warning(f"⚠️ {ticker} has a higher P/E than its sector. It may be overvalued.")
                 else:
-                    st.error(f"Sector P/E ratio for **{sector}** is not available.")
+                    st.success(f"✅ {ticker} has a lower P/E than its sector. It may be undervalued.")
             else:
-                st.error("Sector information is not available for this ticker.")
+                st.error(f"Sector P/E ratio for **{sector}** is not available.")
 
 # -----------------------------------------------------------------------------
 # Growth Stock Screener
@@ -251,6 +249,7 @@ elif page == "Growth Stock Screener":
             )
         else:
             st.subheader(f"📈 Growth Metrics for {ticker}")
+
             for key, (title, guidance) in GROWTH_GUIDANCE.items():
                 if key == "revenueGrowth":
                     value = f"{revenue_growth:.2f}%" if revenue_growth is not None else "N/A"
