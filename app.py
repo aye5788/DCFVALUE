@@ -45,26 +45,24 @@ def get_company_sector(ticker):
             return data.get("sector", "").strip()
     return None
 
-# New function: Get Sector P/E for a given sector (using case-insensitive matching)
-@st.cache_data(ttl=0)
-def get_sector_pe_for(sector, date=TODAY_DATE):
-    """
-    Fetch the P/E ratio for a specific sector for the given date.
-    The endpoint returns data for all sectors; we return the one matching the given sector (case-insensitive).
-    """
-    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={date}&apikey={API_KEY}"
+# New function: Get all sectors' P/E ratios as a dictionary.
+@st.cache_data(ttl=3600)
+def get_sector_pe():
+    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={TODAY_DATE}&apikey={API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
+        result = {}
         if data:
             for item in data:
-                # Use case-insensitive comparison
-                if item.get("sector", "").strip().lower() == sector.lower():
-                    try:
-                        return float(item["pe"])
-                    except (TypeError, ValueError):
-                        return None
-    return None
+                sector_name = item.get("sector", "").strip()
+                try:
+                    pe_value = float(item.get("pe"))
+                except (TypeError, ValueError):
+                    pe_value = None
+                result[sector_name] = pe_value
+        return result
+    return {}
 
 # Additional endpoints for computing growth metrics:
 def get_income_statement(ticker, limit=3):
@@ -174,7 +172,7 @@ st.sidebar.title("📊 Navigation")
 page = st.sidebar.radio("Choose a Screener", ["Valuation Dashboard", "Growth Stock Screener"])
 
 # -----------------------------------------------------------------------------
-# Valuation Dashboard (Unchanged, with Sector P/E Comparison restored)
+# Valuation Dashboard (with Sector P/E Comparison)
 # -----------------------------------------------------------------------------
 if page == "Valuation Dashboard":
     st.title("📈 Stock Valuation Dashboard")
@@ -204,14 +202,20 @@ if page == "Valuation Dashboard":
             
             # Sector P/E comparison:
             if sector:
-                sector_pe = get_sector_pe_for(sector)
+                sector_pe_data = get_sector_pe()
+                matched_pe = None
+                # Search for a matching sector (case-insensitive)
+                for sec, pe in sector_pe_data.items():
+                    if sec.lower() == sector.lower():
+                        matched_pe = pe
+                        break
                 stock_pe = ratios_data.get("priceEarningsRatio", None)
-                if sector_pe is not None and stock_pe is not None:
+                if matched_pe is not None and stock_pe is not None:
                     st.subheader("📊 P/E Ratio Comparison")
                     col3, col4 = st.columns(2)
                     col3.metric(f"{ticker} P/E", f"{float(stock_pe):.2f}")
-                    col4.metric(f"{sector} Sector P/E", f"{float(sector_pe):.2f}")
-                    if float(stock_pe) > float(sector_pe):
+                    col4.metric(f"{sector} Sector P/E", f"{float(matched_pe):.2f}")
+                    if float(stock_pe) > float(matched_pe):
                         st.warning(f"⚠️ {ticker} has a higher P/E than its sector ({sector}). It may be overvalued.")
                     else:
                         st.success(f"✅ {ticker} has a lower P/E than its sector ({sector}). It may be undervalued.")
@@ -277,4 +281,3 @@ elif page == "Growth Stock Screener":
         
         for label, value in metrics.items():
             st.markdown(f"**{label}:** {value}  \n*{guidance_text.get(label, '')}*")
-
