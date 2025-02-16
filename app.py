@@ -177,43 +177,7 @@ def plot_assets_vs_liabilities(bal_df: pd.DataFrame):
     st.altair_chart(chart, use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# Growth Screener Chart Helpers (New) - Color-Coded YoY
-# -----------------------------------------------------------------------------
-def color_condition_expression():
-    """
-    Returns an Altair conditional expression that colors bars:
-    - Green if >= 20
-    - Orange if >= 10
-    - Red otherwise
-    """
-    return alt.condition(
-        "datum.value >= 20",
-        alt.value("green"),
-        alt.condition(
-            "datum.value >= 10",
-            alt.value("orange"),
-            alt.value("red")
-        )
-    )
-
-def color_coded_growth_text(growth_value: float) -> str:
-    """
-    Returns an HTML string with color-coded classification based on thresholds:
-      < 10% = red (Weak)
-      10-20% = orange (Moderate)
-      >= 20% = green (Strong)
-    """
-    if pd.isna(growth_value):
-        return "N/A"
-    if growth_value < 10:
-        return f"<span style='color:red;'>{growth_value:.2f}% (Weak)</span>"
-    elif growth_value < 20:
-        return f"<span style='color:orange;'>{growth_value:.2f}% (Moderate)</span>"
-    else:
-        return f"<span style='color:green;'>{growth_value:.2f}% (Strong)</span>"
-
-# -----------------------------------------------------------------------------
-# Guidance Dictionaries (Unchanged)
+# Guidance Dictionaries for Display (Unchanged)
 # -----------------------------------------------------------------------------
 RATIO_GUIDANCE = {
     "priceEarningsRatio": ("Price-to-Earnings (P/E) Ratio", 
@@ -295,7 +259,6 @@ if page == "Valuation Dashboard":
                 st.markdown("**Income Statement**")
                 inc_df = pd.DataFrame(income_reports)
                 
-                # Plot totalRevenue & netIncome
                 if "totalRevenue" in inc_df.columns:
                     plot_annual_bars(
                         inc_df[["fiscalDateEnding","totalRevenue"]].copy(),
@@ -348,7 +311,7 @@ if page == "Valuation Dashboard":
                 st.info("No annual cash flow data from Alpha Vantage.")
 
 # -----------------------------------------------------------------------------
-# Growth Stock Screener (Switched to AV for Multi-Year Growth Analysis)
+# Growth Stock Screener (Using AV for Multi-Year Growth Analysis)
 # -----------------------------------------------------------------------------
 elif page == "Growth Stock Screener":
     st.title("🚀 Growth Stock Screener")
@@ -366,10 +329,8 @@ elif page == "Growth Stock Screener":
             if data and isinstance(data, list) and len(data) > 0:
                 ratios_data = data[0]
         
-        # We'll still display these below if they exist:
         st.subheader("Key Growth Ratios (from FMP)")
         if ratios_data:
-            # Example: Price-to-Sales, EV/Revenue, Free Cash Flow Per Share
             p_s = ratios_data.get("priceToSalesRatio")
             ev_sales = ratios_data.get("evToSales")
             fcf_per_share = ratios_data.get("freeCashFlowPerShare")
@@ -404,22 +365,19 @@ elif page == "Growth Stock Screener":
                 inc_df["Year"] = inc_df["fiscalDateEnding"].str[:4]
                 inc_df["totalRevenue"] = pd.to_numeric(inc_df["totalRevenue"], errors="coerce")
                 
-                # Drop invalid rows, sort by year ascending
                 inc_df = inc_df.dropna(subset=["totalRevenue"])
                 inc_df = inc_df.sort_values("Year")
                 
-                # Compute YoY growth
                 inc_df["Revenue_Growth_%"] = inc_df["totalRevenue"].pct_change() * 100
                 
-                # Build a color-coded bar chart for Revenue_Growth_%
-                # We'll rename the column to something simpler for charting
+                # Rename column for charting
                 inc_df_renamed = inc_df.rename(columns={"Revenue_Growth_%": "value"})
-                
-                # Drop the first row (which has NaN growth) if you only want valid yoy
                 inc_df_renamed = inc_df_renamed.dropna(subset=["value"])
                 
-                # Conditional color
-                color_condition = color_condition_expression()
+                # Compute color for each row based on growth thresholds
+                inc_df_renamed["growth_color"] = inc_df_renamed["value"].apply(
+                    lambda x: "green" if x >= 20 else "orange" if x >= 10 else "red"
+                )
                 
                 chart = (
                     alt.Chart(inc_df_renamed)
@@ -427,7 +385,7 @@ elif page == "Growth Stock Screener":
                     .encode(
                         x=alt.X("Year:N", sort=None),
                         y=alt.Y("value:Q", title="Revenue Growth (%)", axis=alt.Axis(format=",.2f")),
-                        color=color_condition,
+                        color=alt.Color("growth_color:N", scale=None),
                         tooltip=[
                             alt.Tooltip("Year:N", title="Year"),
                             alt.Tooltip("value:Q", title="Growth (%)", format=",.2f")
@@ -437,10 +395,8 @@ elif page == "Growth Stock Screener":
                 )
                 st.altair_chart(chart, use_container_width=True)
                 
-                # Show color-coded rating for the latest year
                 latest_growth = inc_df_renamed["value"].iloc[-1]
-                rating_html = color_coded_growth_text(latest_growth)
-                st.markdown(f"**Latest Revenue Growth:** {rating_html}", unsafe_allow_html=True)
+                st.markdown(f"**Latest Revenue Growth:** {color_coded_growth_text(latest_growth)}", unsafe_allow_html=True)
             
             # -----------------------------------------------------------------
             # 2b. Compute Operating Cash Flow YoY Growth
@@ -459,7 +415,9 @@ elif page == "Growth Stock Screener":
                 cf_df_renamed = cf_df.rename(columns={"OCF_Growth_%": "value"})
                 cf_df_renamed = cf_df_renamed.dropna(subset=["value"])
                 
-                color_condition = color_condition_expression()
+                cf_df_renamed["growth_color"] = cf_df_renamed["value"].apply(
+                    lambda x: "green" if x >= 20 else "orange" if x >= 10 else "red"
+                )
                 
                 chart_ocf = (
                     alt.Chart(cf_df_renamed)
@@ -467,7 +425,7 @@ elif page == "Growth Stock Screener":
                     .encode(
                         x=alt.X("Year:N", sort=None),
                         y=alt.Y("value:Q", title="Operating CF Growth (%)", axis=alt.Axis(format=",.2f")),
-                        color=color_condition,
+                        color=alt.Color("growth_color:N", scale=None),
                         tooltip=[
                             alt.Tooltip("Year:N", title="Year"),
                             alt.Tooltip("value:Q", title="Growth (%)", format=",.2f")
@@ -477,12 +435,24 @@ elif page == "Growth Stock Screener":
                 )
                 st.altair_chart(chart_ocf, use_container_width=True)
                 
-                # Show color-coded rating for the latest year
                 latest_ocf_growth = cf_df_renamed["value"].iloc[-1]
-                rating_ocf_html = color_coded_growth_text(latest_ocf_growth)
-                st.markdown(f"**Latest Operating CF Growth:** {rating_ocf_html}", unsafe_allow_html=True)
+                st.markdown(f"**Latest Operating CF Growth:** {color_coded_growth_text(latest_ocf_growth)}", unsafe_allow_html=True)
 
-            # If you want to add netIncome growth, you can do the same approach
-            # with the inc_df above, just focusing on netIncome or ebit, etc.
-
-        # End of Growth Screener
+# -----------------------------------------------------------------------------
+# Utility: Color-Coded Growth Text Function
+# -----------------------------------------------------------------------------
+def color_coded_growth_text(growth_value: float) -> str:
+    """
+    Returns an HTML string with a color-coded classification based on the growth_value:
+    - < 10%: red (Weak)
+    - 10-20%: orange (Moderate)
+    - >= 20%: green (Strong)
+    """
+    if pd.isna(growth_value):
+        return "N/A"
+    if growth_value < 10:
+        return f"<span style='color:red;'>{growth_value:.2f}% (Weak)</span>"
+    elif growth_value < 20:
+        return f"<span style='color:orange;'>{growth_value:.2f}% (Moderate)</span>"
+    else:
+        return f"<span style='color:green;'>{growth_value:.2f}% (Strong)</span>"
