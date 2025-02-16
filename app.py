@@ -199,26 +199,49 @@ def fetch_cash_flow_av(symbol: str, api_key: str) -> dict:
         return response.json()
     return {}
 
-def plot_annual_bars(df: pd.DataFrame, metric_col: str, title: str):
+# -----------------------------------------------------------------------------
+# Updated Plot Function to Scale Large Numbers
+# -----------------------------------------------------------------------------
+def plot_annual_bars(df: pd.DataFrame, metric_col: str, title: str, scale=1e9):
     """
-    Given a DataFrame with columns ['fiscalDateEnding', metric_col], 
-    plot an Altair bar chart with the year on x-axis and the metric on y-axis.
+    Plots an Altair bar chart of the given metric over time, scaling large values
+    to billions by default (scale=1e9).
+
+    Args:
+        df (pd.DataFrame): Must contain columns ["fiscalDateEnding", metric_col].
+        metric_col (str): The column name for the numeric metric to plot.
+        title (str): The descriptive title of the metric (e.g., "Total Revenue").
+        scale (float): Factor to divide the raw numbers by (1e9 for billions, 1e6 for millions, etc.).
     """
-    # Extract year from date (e.g., "2023-12-31" -> "2023")
+    # Extract year from "YYYY-MM-DD"
     df["Year"] = df["fiscalDateEnding"].str[:4]
-    df[metric_col] = pd.to_numeric(df[metric_col], errors="coerce")
-    
-    # Sort by Year ascending
-    df = df.dropna(subset=[metric_col])  # remove rows where metric is NaN
+
+    # Convert to numeric and scale
+    df[metric_col] = pd.to_numeric(df[metric_col], errors="coerce") / scale
+
+    # Drop any rows where the metric is NaN and sort by Year ascending
+    df = df.dropna(subset=[metric_col])
     df = df.sort_values("Year")
-    
+
+    # Build an Altair bar chart
     chart = (
         alt.Chart(df)
         .mark_bar()
         .encode(
             x=alt.X("Year:N", sort=None),
-            y=alt.Y(f"{metric_col}:Q", title=title),
-            tooltip=["Year", metric_col],
+            y=alt.Y(
+                f"{metric_col}:Q",
+                title=f"{title} (Billions USD)",
+                axis=alt.Axis(format=",.2f")
+            ),
+            tooltip=[
+                alt.Tooltip("Year:N", title="Year"),
+                alt.Tooltip(
+                    f"{metric_col}:Q",
+                    title=f"{title} (Billions USD)",
+                    format=",.2f"
+                ),
+            ],
         )
         .properties(width=500, height=300, title=title)
     )
@@ -284,13 +307,17 @@ if page == "Valuation Dashboard":
                 
                 # Example: Plot totalRevenue & netIncome
                 if "totalRevenue" in inc_df.columns:
-                    plot_annual_bars(inc_df[["fiscalDateEnding","totalRevenue"]].copy(),
-                                     "totalRevenue",
-                                     "Total Revenue")
+                    plot_annual_bars(
+                        inc_df[["fiscalDateEnding","totalRevenue"]].copy(),
+                        "totalRevenue",
+                        "Total Revenue"
+                    )
                 if "netIncome" in inc_df.columns:
-                    plot_annual_bars(inc_df[["fiscalDateEnding","netIncome"]].copy(),
-                                     "netIncome",
-                                     "Net Income")
+                    plot_annual_bars(
+                        inc_df[["fiscalDateEnding","netIncome"]].copy(),
+                        "netIncome",
+                        "Net Income"
+                    )
             else:
                 st.info("No annual income statement data from Alpha Vantage.")
 
@@ -302,13 +329,17 @@ if page == "Valuation Dashboard":
                 
                 # Example: Plot totalAssets & totalLiabilities
                 if "totalAssets" in bal_df.columns:
-                    plot_annual_bars(bal_df[["fiscalDateEnding","totalAssets"]].copy(),
-                                     "totalAssets",
-                                     "Total Assets")
+                    plot_annual_bars(
+                        bal_df[["fiscalDateEnding","totalAssets"]].copy(),
+                        "totalAssets",
+                        "Total Assets"
+                    )
                 if "totalLiabilities" in bal_df.columns:
-                    plot_annual_bars(bal_df[["fiscalDateEnding","totalLiabilities"]].copy(),
-                                     "totalLiabilities",
-                                     "Total Liabilities")
+                    plot_annual_bars(
+                        bal_df[["fiscalDateEnding","totalLiabilities"]].copy(),
+                        "totalLiabilities",
+                        "Total Liabilities"
+                    )
             else:
                 st.info("No annual balance sheet data from Alpha Vantage.")
 
@@ -320,13 +351,17 @@ if page == "Valuation Dashboard":
                 
                 # Example: Plot operatingCashflow & capitalExpenditures
                 if "operatingCashflow" in cf_df.columns:
-                    plot_annual_bars(cf_df[["fiscalDateEnding","operatingCashflow"]].copy(),
-                                     "operatingCashflow",
-                                     "Operating Cash Flow")
+                    plot_annual_bars(
+                        cf_df[["fiscalDateEnding","operatingCashflow"]].copy(),
+                        "operatingCashflow",
+                        "Operating Cash Flow"
+                    )
                 if "capitalExpenditures" in cf_df.columns:
-                    plot_annual_bars(cf_df[["fiscalDateEnding","capitalExpenditures"]].copy(),
-                                     "capitalExpenditures",
-                                     "Capital Expenditures")
+                    plot_annual_bars(
+                        cf_df[["fiscalDateEnding","capitalExpenditures"]].copy(),
+                        "capitalExpenditures",
+                        "Capital Expenditures"
+                    )
             else:
                 st.info("No annual cash flow data from Alpha Vantage.")
 
