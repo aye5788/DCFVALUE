@@ -1,18 +1,22 @@
 import streamlit as st
 import requests
 from datetime import datetime
+import pandas as pd
+import altair as alt
 
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-API_KEY = st.secrets["fmp"]["api_key"]
-BASE_URL = "https://financialmodelingprep.com/api/v3"
+FMP_API_KEY = st.secrets["fmp"]["api_key"]
+AV_API_KEY = st.secrets["av"]["api_key"]
+
+FMP_BASE_URL = "https://financialmodelingprep.com/api/v3"
 
 # -----------------------------------------------------------------------------
-# Data Fetching Functions (FMP Endpoints)
+# FMP Data Fetching Functions
 # -----------------------------------------------------------------------------
 def get_dcf(ticker):
-    url = f"{BASE_URL}/discounted-cash-flow/{ticker}?apikey={API_KEY}"
+    url = f"{FMP_BASE_URL}/discounted-cash-flow/{ticker}?apikey={FMP_API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
@@ -23,7 +27,7 @@ def get_dcf(ticker):
     return None
 
 def get_ratios(ticker):
-    url = f"{BASE_URL}/ratios/{ticker}?period=annual&limit=1&apikey={API_KEY}"
+    url = f"{FMP_BASE_URL}/ratios/{ticker}?period=annual&limit=1&apikey={FMP_API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
@@ -34,7 +38,7 @@ def get_ratios(ticker):
     return None
 
 def get_company_sector(ticker):
-    url = f"{BASE_URL}/profile/{ticker}?apikey={API_KEY}"
+    url = f"{FMP_BASE_URL}/profile/{ticker}?apikey={FMP_API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
@@ -44,27 +48,8 @@ def get_company_sector(ticker):
             return data.get("sector", "").strip()
     return None
 
-# New function: Get all sectors' P/E ratios as a dictionary using the current date
-def get_sector_pe():
-    current_date = datetime.today().strftime("%Y-%m-%d")
-    url = f"https://financialmodelingprep.com/api/v4/sector_price_earning_ratio?date={current_date}&apikey={API_KEY}"
-    response = requests.get(url)
-    result = {}
-    if response.status_code == 200:
-        data = response.json()
-        if data:
-            for item in data:
-                sector_name = item.get("sector", "").strip()
-                try:
-                    pe_value = float(item.get("pe"))
-                except (TypeError, ValueError):
-                    pe_value = None
-                result[sector_name] = pe_value
-    return result
-
-# Additional endpoints for computing growth metrics:
-def get_income_statement(ticker, limit=3):
-    url = f"{BASE_URL}/income-statement/{ticker}?limit={limit}&apikey={API_KEY}"
+def get_income_statement_fmp(ticker, limit=3):
+    url = f"{FMP_BASE_URL}/income-statement/{ticker}?limit={limit}&apikey={FMP_API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
@@ -72,8 +57,8 @@ def get_income_statement(ticker, limit=3):
             return data
     return None
 
-def get_cash_flow_statement(ticker, limit=3):
-    url = f"{BASE_URL}/cash-flow-statement/{ticker}?limit={limit}&apikey={API_KEY}"
+def get_cash_flow_statement_fmp(ticker, limit=3):
+    url = f"{FMP_BASE_URL}/cash-flow-statement/{ticker}?limit={limit}&apikey={FMP_API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
@@ -82,12 +67,11 @@ def get_cash_flow_statement(ticker, limit=3):
     return None
 
 # -----------------------------------------------------------------------------
-# Helper Functions to Compute Growth Metrics (Updated)
+# Helper Functions to Compute Growth Metrics
 # -----------------------------------------------------------------------------
 def compute_revenue_growth(income_data):
     """
     Compute YoY revenue growth using the first two valid (nonzero) revenue values.
-    Note: The income statement returns revenue under the key 'revenue'.
     """
     if income_data:
         valid_revenues = []
@@ -110,7 +94,6 @@ def compute_revenue_growth(income_data):
 def compute_gross_profit_margin(income_data):
     """
     Compute the gross profit margin (%) from the latest income statement data.
-    Uses the keys 'revenue' and 'grossProfit'.
     """
     if income_data and len(income_data) > 0:
         latest = income_data[0]
@@ -147,11 +130,16 @@ def compute_operating_cf_growth(cash_flow_data):
 # Guidance Dictionaries for Display
 # -----------------------------------------------------------------------------
 RATIO_GUIDANCE = {
-    "priceEarningsRatio": ("Price-to-Earnings (P/E) Ratio", "Higher P/E suggests strong growth expectations. Below 15 = undervalued, 15-25 = fairly valued, above 25 = overvalued."),
-    "currentRatio": ("Current Ratio", "Above 1.5 = strong liquidity, 1.0-1.5 = adequate, below 1 = potential liquidity issues."),
-    "quickRatio": ("Quick Ratio", "Above 1.0 = strong liquidity, 0.5-1.0 = acceptable, below 0.5 = risky."),
-    "debtEquityRatio": ("Debt to Equity Ratio", "Below 1.0 = conservative financing, 1.0-2.0 = moderate risk, above 2.0 = highly leveraged."),
-    "returnOnEquity": ("Return on Equity (ROE)", "Above 15% = strong, 10-15% = average, below 10% = weak."),
+    "priceEarningsRatio": ("Price-to-Earnings (P/E) Ratio", 
+                           "Higher P/E suggests strong growth expectations. Below 15 = undervalued, 15-25 = fairly valued, above 25 = overvalued."),
+    "currentRatio": ("Current Ratio", 
+                     "Above 1.5 = strong liquidity, 1.0-1.5 = adequate, below 1 = potential liquidity issues."),
+    "quickRatio": ("Quick Ratio", 
+                   "Above 1.0 = strong liquidity, 0.5-1.0 = acceptable, below 0.5 = risky."),
+    "debtEquityRatio": ("Debt to Equity Ratio", 
+                        "Below 1.0 = conservative financing, 1.0-2.0 = moderate risk, above 2.0 = highly leveraged."),
+    "returnOnEquity": ("Return on Equity (ROE)", 
+                       "Above 15% = strong, 10-15% = average, below 10% = weak."),
 }
 
 GROWTH_GUIDANCE = {
@@ -164,25 +152,101 @@ GROWTH_GUIDANCE = {
 }
 
 # -----------------------------------------------------------------------------
+# Alpha Vantage Integration
+# -----------------------------------------------------------------------------
+def fetch_income_statement_av(symbol: str, api_key: str) -> dict:
+    """
+    Fetch annual income statement data from Alpha Vantage.
+    """
+    base_url = "https://www.alphavantage.co/query"
+    params = {
+        "function": "INCOME_STATEMENT",
+        "symbol": symbol,
+        "apikey": api_key
+    }
+    response = requests.get(base_url, params=params)
+    if response.status_code == 200:
+        return response.json()
+    return {}
+
+def fetch_balance_sheet_av(symbol: str, api_key: str) -> dict:
+    """
+    Fetch annual balance sheet data from Alpha Vantage.
+    """
+    base_url = "https://www.alphavantage.co/query"
+    params = {
+        "function": "BALANCE_SHEET",
+        "symbol": symbol,
+        "apikey": api_key
+    }
+    response = requests.get(base_url, params=params)
+    if response.status_code == 200:
+        return response.json()
+    return {}
+
+def fetch_cash_flow_av(symbol: str, api_key: str) -> dict:
+    """
+    Fetch annual cash flow data from Alpha Vantage.
+    """
+    base_url = "https://www.alphavantage.co/query"
+    params = {
+        "function": "CASH_FLOW",
+        "symbol": symbol,
+        "apikey": api_key
+    }
+    response = requests.get(base_url, params=params)
+    if response.status_code == 200:
+        return response.json()
+    return {}
+
+def plot_annual_bars(df: pd.DataFrame, metric_col: str, title: str):
+    """
+    Given a DataFrame with columns ['fiscalDateEnding', metric_col], 
+    plot an Altair bar chart with the year on x-axis and the metric on y-axis.
+    """
+    # Extract year from date (e.g., "2023-12-31" -> "2023")
+    df["Year"] = df["fiscalDateEnding"].str[:4]
+    df[metric_col] = pd.to_numeric(df[metric_col], errors="coerce")
+    
+    # Sort by Year ascending
+    df = df.dropna(subset=[metric_col])  # remove rows where metric is NaN
+    df = df.sort_values("Year")
+    
+    chart = (
+        alt.Chart(df)
+        .mark_bar()
+        .encode(
+            x=alt.X("Year:N", sort=None),
+            y=alt.Y(f"{metric_col}:Q", title=title),
+            tooltip=["Year", metric_col],
+        )
+        .properties(width=500, height=300, title=title)
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+# -----------------------------------------------------------------------------
 # Sidebar Navigation
 # -----------------------------------------------------------------------------
 st.sidebar.title("📊 Navigation")
 page = st.sidebar.radio("Choose a Screener", ["Valuation Dashboard", "Growth Stock Screener"])
 
 # -----------------------------------------------------------------------------
-# Valuation Dashboard (without Sector P/E Comparison)
+# Valuation Dashboard (No Sector P/E)
 # -----------------------------------------------------------------------------
 if page == "Valuation Dashboard":
     st.title("📈 Stock Valuation Dashboard")
     ticker = st.text_input("Enter stock ticker:").upper()
     
     if st.button("Analyze") and ticker:
-        sector = get_company_sector(ticker)
+        # -----------------------------
+        # FMP: DCF & Ratios
+        # -----------------------------
         dcf_data = get_dcf(ticker)
         ratios_data = get_ratios(ticker)
         
         if not dcf_data and not ratios_data:
-            st.error(f"Could not retrieve any required data for ticker {ticker}. Please verify the ticker symbol or try again later.")
+            st.error(f"Could not retrieve any required data for ticker {ticker}. "
+                     "Please verify the ticker symbol or try again later.")
         else:
             st.subheader(f"Valuation Metrics for {ticker}")
             col1, col2 = st.columns(2)
@@ -204,8 +268,70 @@ if page == "Valuation Dashboard":
             else:
                 st.warning("Ratios data not available.")
 
+            # -----------------------------
+            # Alpha Vantage: Annual Trends
+            # -----------------------------
+            st.subheader("🔎 Annual Trends (via Alpha Vantage)")
+            av_income = fetch_income_statement_av(ticker, AV_API_KEY)
+            av_balance = fetch_balance_sheet_av(ticker, AV_API_KEY)
+            av_cashfl = fetch_cash_flow_av(ticker, AV_API_KEY)
+            
+            # Income Statement Bar Charts
+            income_reports = av_income.get("annualReports", [])
+            if income_reports:
+                st.markdown("**Income Statement**")
+                inc_df = pd.DataFrame(income_reports)
+                
+                # Example: Plot totalRevenue & netIncome
+                if "totalRevenue" in inc_df.columns:
+                    plot_annual_bars(inc_df[["fiscalDateEnding","totalRevenue"]].copy(),
+                                     "totalRevenue",
+                                     "Total Revenue")
+                if "netIncome" in inc_df.columns:
+                    plot_annual_bars(inc_df[["fiscalDateEnding","netIncome"]].copy(),
+                                     "netIncome",
+                                     "Net Income")
+            else:
+                st.info("No annual income statement data from Alpha Vantage.")
+
+            # Balance Sheet Bar Charts
+            balance_reports = av_balance.get("annualReports", [])
+            if balance_reports:
+                st.markdown("**Balance Sheet**")
+                bal_df = pd.DataFrame(balance_reports)
+                
+                # Example: Plot totalAssets & totalLiabilities
+                if "totalAssets" in bal_df.columns:
+                    plot_annual_bars(bal_df[["fiscalDateEnding","totalAssets"]].copy(),
+                                     "totalAssets",
+                                     "Total Assets")
+                if "totalLiabilities" in bal_df.columns:
+                    plot_annual_bars(bal_df[["fiscalDateEnding","totalLiabilities"]].copy(),
+                                     "totalLiabilities",
+                                     "Total Liabilities")
+            else:
+                st.info("No annual balance sheet data from Alpha Vantage.")
+
+            # Cash Flow Bar Charts
+            cashflow_reports = av_cashfl.get("annualReports", [])
+            if cashflow_reports:
+                st.markdown("**Cash Flow Statement**")
+                cf_df = pd.DataFrame(cashflow_reports)
+                
+                # Example: Plot operatingCashflow & capitalExpenditures
+                if "operatingCashflow" in cf_df.columns:
+                    plot_annual_bars(cf_df[["fiscalDateEnding","operatingCashflow"]].copy(),
+                                     "operatingCashflow",
+                                     "Operating Cash Flow")
+                if "capitalExpenditures" in cf_df.columns:
+                    plot_annual_bars(cf_df[["fiscalDateEnding","capitalExpenditures"]].copy(),
+                                     "capitalExpenditures",
+                                     "Capital Expenditures")
+            else:
+                st.info("No annual cash flow data from Alpha Vantage.")
+
 # -----------------------------------------------------------------------------
-# Growth Stock Screener (Modified for Growth Metrics)
+# Growth Stock Screener
 # -----------------------------------------------------------------------------
 elif page == "Growth Stock Screener":
     st.title("🚀 Growth Stock Screener")
@@ -213,7 +339,7 @@ elif page == "Growth Stock Screener":
     
     if st.button("Analyze Growth") and ticker:
         # Fetch ratios from the Key Metrics endpoint
-        ratios_url = f"{BASE_URL}/ratios/{ticker}?period=annual&limit=1&apikey={API_KEY}"
+        ratios_url = f"{FMP_BASE_URL}/ratios/{ticker}?period=annual&limit=1&apikey={FMP_API_KEY}"
         ratios_response = requests.get(ratios_url)
         ratios_data = None
         if ratios_response.status_code == 200:
@@ -221,20 +347,20 @@ elif page == "Growth Stock Screener":
             if data and isinstance(data, list) and len(data) > 0:
                 ratios_data = data[0]
         
-        # Fetch historical income statement and cash flow data (using up to 3 periods)
-        income_data = get_income_statement(ticker, limit=3)
-        cash_flow_data = get_cash_flow_statement(ticker, limit=3)
+        # Fetch historical income statement and cash flow data (using up to 3 periods) from FMP
+        income_data = get_income_statement_fmp(ticker, limit=3)
+        cash_flow_data = get_cash_flow_statement_fmp(ticker, limit=3)
         
         # Compute the missing growth metrics
         revenue_growth = compute_revenue_growth(income_data)
         gross_profit_margin = compute_gross_profit_margin(income_data)
         operating_cf_growth = compute_operating_cf_growth(cash_flow_data)
         
-        # Use evToSales from the ratios endpoint as EV/Revenue (alias)
+        # Use evToSales from the ratios endpoint as EV/Revenue
         ev_revenue = ratios_data.get("evToSales") if ratios_data else None
         ev_revenue_display = f"{float(ev_revenue):.2f}" if ev_revenue not in [None, "N/A"] else "N/A"
         
-        # Build a dictionary of metrics to display only if available
+        # Build a dictionary of metrics to display
         metrics = {}
         if revenue_growth is not None:
             metrics["Revenue Growth (YoY)"] = f"{revenue_growth:.2f}%"
@@ -261,3 +387,4 @@ elif page == "Growth Stock Screener":
         
         for label, value in metrics.items():
             st.markdown(f"**{label}:** {value}  \n*{guidance_text.get(label, '')}*")
+
