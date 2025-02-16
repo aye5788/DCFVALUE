@@ -200,7 +200,7 @@ def fetch_cash_flow_av(symbol: str, api_key: str) -> dict:
     return {}
 
 # -----------------------------------------------------------------------------
-# Updated Plot Function to Scale Large Numbers
+# Updated Plot Functions
 # -----------------------------------------------------------------------------
 def plot_annual_bars(df: pd.DataFrame, metric_col: str, title: str, scale=1e9):
     """
@@ -213,17 +213,15 @@ def plot_annual_bars(df: pd.DataFrame, metric_col: str, title: str, scale=1e9):
         title (str): The descriptive title of the metric (e.g., "Total Revenue").
         scale (float): Factor to divide the raw numbers by (1e9 for billions, 1e6 for millions, etc.).
     """
-    # Extract year from "YYYY-MM-DD"
     df["Year"] = df["fiscalDateEnding"].str[:4]
 
     # Convert to numeric and scale
     df[metric_col] = pd.to_numeric(df[metric_col], errors="coerce") / scale
 
-    # Drop any rows where the metric is NaN and sort by Year ascending
+    # Drop NaNs and sort
     df = df.dropna(subset=[metric_col])
     df = df.sort_values("Year")
 
-    # Build an Altair bar chart
     chart = (
         alt.Chart(df)
         .mark_bar()
@@ -245,6 +243,52 @@ def plot_annual_bars(df: pd.DataFrame, metric_col: str, title: str, scale=1e9):
         )
         .properties(width=500, height=300, title=title)
     )
+    st.altair_chart(chart, use_container_width=True)
+
+def plot_assets_vs_liabilities(bal_df: pd.DataFrame):
+    """
+    Overlays a bar chart for Liabilities and a yellow line chart for Assets
+    so you can see whether Assets exceed Liabilities each year.
+    Values are scaled to billions.
+    """
+    bal_df["Year"] = bal_df["fiscalDateEnding"].str[:4]
+    
+    # Convert to numeric and scale to billions
+    bal_df["totalAssets"] = pd.to_numeric(bal_df["totalAssets"], errors="coerce") / 1e9
+    bal_df["totalLiabilities"] = pd.to_numeric(bal_df["totalLiabilities"], errors="coerce") / 1e9
+    
+    # Drop rows where either is NaN
+    bal_df = bal_df.dropna(subset=["totalAssets", "totalLiabilities"])
+    bal_df = bal_df.sort_values("Year")
+
+    # Bars for Liabilities
+    bars = alt.Chart(bal_df).mark_bar(color="#1f77b4").encode(
+        x=alt.X("Year:N", sort=None),
+        y=alt.Y(
+            "totalLiabilities:Q",
+            title="(Billions USD)",
+            axis=alt.Axis(format=",.2f")
+        ),
+        tooltip=[
+            alt.Tooltip("Year:N", title="Year"),
+            alt.Tooltip("totalLiabilities:Q", title="Liabilities (Billions USD)", format=",.2f"),
+            alt.Tooltip("totalAssets:Q", title="Assets (Billions USD)", format=",.2f"),
+        ]
+    )
+
+    # Yellow line for Assets
+    line = alt.Chart(bal_df).mark_line(color="yellow", strokeWidth=3).encode(
+        x="Year:N",
+        y="totalAssets:Q"
+    )
+
+    # Layer them together on the same y-scale
+    chart = alt.layer(bars, line).properties(
+        width=500,
+        height=300,
+        title="Liabilities (Bars) vs. Assets (Line)"
+    )
+    
     st.altair_chart(chart, use_container_width=True)
 
 # -----------------------------------------------------------------------------
@@ -305,7 +349,7 @@ if page == "Valuation Dashboard":
                 st.markdown("**Income Statement**")
                 inc_df = pd.DataFrame(income_reports)
                 
-                # Example: Plot totalRevenue & netIncome
+                # Plot totalRevenue & netIncome
                 if "totalRevenue" in inc_df.columns:
                     plot_annual_bars(
                         inc_df[["fiscalDateEnding","totalRevenue"]].copy(),
@@ -321,41 +365,36 @@ if page == "Valuation Dashboard":
             else:
                 st.info("No annual income statement data from Alpha Vantage.")
 
-            # Balance Sheet Bar Charts
+            # Balance Sheet: Overlay Liabilities (bars) & Assets (line)
             balance_reports = av_balance.get("annualReports", [])
             if balance_reports:
                 st.markdown("**Balance Sheet**")
                 bal_df = pd.DataFrame(balance_reports)
                 
-                # Example: Plot totalAssets & totalLiabilities
-                if "totalAssets" in bal_df.columns:
-                    plot_annual_bars(
-                        bal_df[["fiscalDateEnding","totalAssets"]].copy(),
-                        "totalAssets",
-                        "Total Assets"
+                # If both columns exist, overlay them
+                if "totalAssets" in bal_df.columns and "totalLiabilities" in bal_df.columns:
+                    plot_assets_vs_liabilities(
+                        bal_df[["fiscalDateEnding","totalAssets","totalLiabilities"]].copy()
                     )
-                if "totalLiabilities" in bal_df.columns:
-                    plot_annual_bars(
-                        bal_df[["fiscalDateEnding","totalLiabilities"]].copy(),
-                        "totalLiabilities",
-                        "Total Liabilities"
-                    )
+                else:
+                    st.info("Missing 'totalAssets' or 'totalLiabilities' data for overlay chart.")
             else:
                 st.info("No annual balance sheet data from Alpha Vantage.")
 
-            # Cash Flow Bar Charts
+            # Cash Flow Statement Bar Charts
             cashflow_reports = av_cashfl.get("annualReports", [])
             if cashflow_reports:
                 st.markdown("**Cash Flow Statement**")
                 cf_df = pd.DataFrame(cashflow_reports)
                 
-                # Example: Plot operatingCashflow & capitalExpenditures
+                # Operating Cash Flow
                 if "operatingCashflow" in cf_df.columns:
                     plot_annual_bars(
                         cf_df[["fiscalDateEnding","operatingCashflow"]].copy(),
                         "operatingCashflow",
                         "Operating Cash Flow"
                     )
+                # Capital Expenditures
                 if "capitalExpenditures" in cf_df.columns:
                     plot_annual_bars(
                         cf_df[["fiscalDateEnding","capitalExpenditures"]].copy(),
