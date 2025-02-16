@@ -170,7 +170,7 @@ st.sidebar.title("📊 Navigation")
 page = st.sidebar.radio("Choose a Screener", ["Valuation Dashboard", "Growth Stock Screener"])
 
 # -----------------------------------------------------------------------------
-# Valuation Dashboard (with Sector P/E Comparison)
+# Valuation Dashboard (without Sector P/E Comparison)
 # -----------------------------------------------------------------------------
 if page == "Valuation Dashboard":
     st.title("📈 Stock Valuation Dashboard")
@@ -203,30 +203,6 @@ if page == "Valuation Dashboard":
                             st.markdown(f"**{title}:** {ratios_data[key]}  \n*{guidance}*")
             else:
                 st.warning("Ratios data not available.")
-            
-            # Sector P/E comparison:
-            if sector and ratios_data:
-                sector_pe_data = get_sector_pe()
-                matched_pe = None
-                # Search for a matching sector (case-insensitive)
-                for sec, pe in sector_pe_data.items():
-                    if sec.lower() == sector.lower():
-                        matched_pe = pe
-                        break
-                stock_pe = ratios_data.get("priceEarningsRatio", None)
-                if matched_pe is not None and stock_pe is not None:
-                    st.subheader("📊 P/E Ratio Comparison")
-                    col3, col4 = st.columns(2)
-                    col3.metric(f"{ticker} P/E", f"{float(stock_pe):.2f}")
-                    col4.metric(f"{sector} Sector P/E", f"{float(matched_pe):.2f}")
-                    if float(stock_pe) > float(matched_pe):
-                        st.warning(f"⚠️ {ticker} has a higher P/E than its sector ({sector}). It may be overvalued.")
-                    else:
-                        st.success(f"✅ {ticker} has a lower P/E than its sector ({sector}). It may be undervalued.")
-                else:
-                    st.error(f"Sector P/E ratio for {sector} is not available.")
-            else:
-                st.error("Sector information or ratios data is not available for this ticker.")
 
 # -----------------------------------------------------------------------------
 # Growth Stock Screener (Modified for Growth Metrics)
@@ -285,4 +261,3 @@ elif page == "Growth Stock Screener":
         
         for label, value in metrics.items():
             st.markdown(f"**{label}:** {value}  \n*{guidance_text.get(label, '')}*")
-
